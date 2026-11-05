@@ -124,12 +124,13 @@ async def test_options(hass, loaded) -> None:
     result = await hass.config_entries.options.async_init(loaded.entry_id)
     assert result["type"] is FlowResultType.FORM
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {"scan_interval": 30, "show_panel": False}
+        result["flow_id"], {"scan_interval": 30, "show_panel": False, "show_wall": True}
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     await hass.async_block_till_done()
     assert loaded.options["scan_interval"] == 30
     assert "alpicair-nest" not in hass.data["frontend_panels"]
+    assert "alpicair-nest-wall" in hass.data["frontend_panels"]
 
 
 async def test_reconfigure(hass, loaded, unit) -> None:

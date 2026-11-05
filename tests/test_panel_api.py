@@ -56,6 +56,14 @@ async def test_schema_in_russian(admin) -> None:
     assert result["faults"]["Fan1_FeedbackError"] == "Нет сигнала от приточного вентилятора"
 
 
+async def test_schema_in_latvian(admin) -> None:
+    result = (await _ask(admin, "schema", language="lv"))["result"]
+    names = {item["name"]: item for item in result["setpoints"]}
+    assert names["AirTemp_SupplyTarget_Comfort"]["label"] == "Pieplūdes iestatījums, režīms «Komforts»"
+    assert names["OperatingMode"]["options"]["3"] == "Komforts"
+    assert result["faults"]["Fan1_FeedbackError"] == "Nav signāla no pieplūdes ventilatora"
+
+
 async def test_subscription(hass, admin, unit, loaded) -> None:
     await admin.send_json_auto_id({"type": f"{DOMAIN}/subscribe"})
     assert (await admin.receive_json())["success"]

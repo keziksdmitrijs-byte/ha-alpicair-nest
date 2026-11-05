@@ -6,16 +6,18 @@ from homeassistant.components.climate import HVACMode
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.helpers import entity_registry as er
 
-from custom_components.alpicair_nest.const import PANEL_URL
+from custom_components.alpicair_nest.const import PANEL_URL, WALL_URL
 
 
 async def test_setup_and_unload(hass, loaded) -> None:
     assert loaded.state is ConfigEntryState.LOADED
     assert PANEL_URL in hass.data["frontend_panels"]
+    assert WALL_URL in hass.data["frontend_panels"]
     await hass.config_entries.async_unload(loaded.entry_id)
     await hass.async_block_till_done()
     assert loaded.state is ConfigEntryState.NOT_LOADED
     assert PANEL_URL not in hass.data["frontend_panels"]
+    assert WALL_URL not in hass.data["frontend_panels"]
     assert await hass.config_entries.async_setup(loaded.entry_id)
     await hass.async_block_till_done()
     assert PANEL_URL in hass.data["frontend_panels"]
