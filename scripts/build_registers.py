@@ -20,6 +20,7 @@ import openpyxl
 
 sys.path.insert(0, str(Path(__file__).parent))
 from labels import english, russian
+from labels_lv import FAULTS, latvian, option_lv
 
 OUT = Path(__file__).parent.parent / "custom_components" / "alpicair_nest" / "registers.json"
 
@@ -237,13 +238,18 @@ def rows_of(ws):
 def main() -> None:
     sp_ws, dp_ws = load(Path(sys.argv[1]))
     missing: list[str] = []
+    no_latvian: list[str] = []
 
     def label(name: str) -> dict[str, str]:
         ru = russian(name)
         if ru is None:
             missing.append(name)
             ru = english(name)
-        return {"en": english(name), "ru": ru}
+        lv = latvian(name)
+        if lv is None:
+            no_latvian.append(name)
+            lv = english(name)
+        return {"en": english(name), "ru": ru, "lv": lv}
 
     setpoints = []
     group = None
@@ -304,7 +310,7 @@ def main() -> None:
         if name in TRIGGERS:
             entry["cmd"] = TRIGGERS[name]
         if options:
-            entry["o"] = {"en": {str(k): v for k, v in options.items()}, "ru": {str(k): option_ru(v) for k, v in options.items()}}
+            entry["o"] = {"en": {str(k): v for k, v in options.items()}, "ru": {str(k): option_ru(v) for k, v in options.items()}, "lv": {str(k): option_lv(v) for k, v in options.items()}}
         description = clean_description(row["Description"])
         if description and not options:
             entry["t"] = description
@@ -329,7 +335,7 @@ def main() -> None:
             for i, bit_name in enumerate(reversed(names)):
                 if bit_name:
                     mapping[str(i)] = bit_name
-                    faults.setdefault(bit_name, {"en": english(bit_name), "ru": FAULT_RU.get(bit_name, english(bit_name))})
+                    faults.setdefault(bit_name, {"en": english(bit_name), "ru": FAULT_RU.get(bit_name, english(bit_name)), "lv": FAULTS.get(bit_name, english(bit_name))})
             datapoints.append({"n": name, "a": address, "s": 0, "d": 0, "u": "", "sec": "operation", "hidden": 1, "bits": mapping, "fault": status[1].lower(), "l": label(name)})
             continue
         if re.match(r"(Raw_AD_|LAN_(MAC|IP|Gateway|Netmask|DNS)|BT_MAC|ELT_Status)", name):
@@ -356,7 +362,7 @@ def main() -> None:
         }
         is_flag = unit_key in ON_OFF_UNITS or bool(re.search(r"(ActiveOrNot|_Active$|Active_|ExchangerActive$|FansActive$|_Detected|Expired|IsOpen|IsClosed|_Cond_|Feedback|ThermoProtection|Relay_State|Normalized|^DI[12]$|^FireProtection$|^FireDamper[12]_(Open|Close)$)", name)) or name in ("AnyErrorActive", "AnyWarningActive", "AirTemp_Season_CurrentIsWinter")
         if options and len(options) >= 2:
-            entry["o"] = {"en": {str(k): v for k, v in options.items()}, "ru": {str(k): option_ru(v) for k, v in options.items()}}
+            entry["o"] = {"en": {str(k): v for k, v in options.items()}, "ru": {str(k): option_ru(v) for k, v in options.items()}, "lv": {str(k): option_lv(v) for k, v in options.items()}}
         elif is_flag:
             entry["flag"] = 1
         if description and not options:
@@ -374,6 +380,9 @@ def main() -> None:
 
     if missing:
         print("no Russian name:", *missing, sep="\n  ")
+    hidden = {entry["n"] for entry in datapoints if entry.get("hidden")}
+    if set(no_latvian) - hidden:
+        print("no Latvian name:", *sorted(set(no_latvian) - hidden), sep="\n  ")
     data = {
         "version": 1,
         "dp": sorted(datapoints, key=lambda r: r["a"]),
