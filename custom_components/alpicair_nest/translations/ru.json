@@ -68,7 +68,8 @@
         "title": "AlpicAir NEST",
         "data": {
           "scan_interval": "Интервал опроса",
-          "show_panel": "Показывать панель в боковом меню"
+          "show_panel": "Показывать панель в боковом меню",
+          "show_wall": "Показывать панель NSPanel Pro в боковом меню"
         }
       }
     }

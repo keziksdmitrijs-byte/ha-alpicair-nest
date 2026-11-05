@@ -68,7 +68,8 @@
         "title": "AlpicAir NEST",
         "data": {
           "scan_interval": "Aptaujas intervāls",
-          "show_panel": "Rādīt paneli sānu joslā"
+          "show_panel": "Rādīt paneli sānu joslā",
+          "show_wall": "Rādīt NSPanel Pro paneli sānu joslā"
         }
       }
     }
