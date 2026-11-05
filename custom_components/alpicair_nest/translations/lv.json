@@ -1,0 +1,94 @@
+{
+  "config": {
+    "flow_title": "{name}",
+    "step": {
+      "user": {
+        "title": "AlpicAir NEST",
+        "description": "Kā pievienot iekārtu?",
+        "menu_options": {
+          "manual": "Ievadīt IP adresi",
+          "discover": "Atrast automātiski"
+        }
+      },
+      "manual": {
+        "title": "Iekārtas adrese",
+        "description": "Iekārtā jābūt ieslēgtam Modbus TCP.",
+        "data": {
+          "host": "IP adrese vai resursdatora nosaukums",
+          "port": "Ports",
+          "unit": "Modbus adrese"
+        },
+        "data_description": {
+          "unit": "Atstājiet tukšu: parastās adreses tiks pārbaudītas automātiski."
+        }
+      },
+      "confirm": {
+        "title": "Tā neizskatās pēc NEST iekārtas",
+        "description": "{host} atbild uz Modbus pieprasījumiem (adrese {unit}), bet ne tā, kā NEST iekārta. Tomēr pievienot?"
+      },
+      "discovered": {
+        "title": "Atrastās iekārtas",
+        "description": "Tīklā atrastas iekārtas: {count}.",
+        "data": {
+          "device": "Iekārta"
+        }
+      },
+      "nothing_found": {
+        "title": "Iekārta nav atrasta",
+        "description": "Lokālajos tīklos neviens neatbildēja uz portu 502. Pārbaudiet, vai iekārtā ir ieslēgts Modbus TCP un vai tā ir vienā tīklā ar Home Assistant.",
+        "menu_options": {
+          "discover": "Meklēt vēlreiz",
+          "manual": "Ievadīt IP adresi"
+        }
+      },
+      "reconfigure": {
+        "title": "Iekārtas adrese",
+        "data": {
+          "host": "IP adrese vai resursdatora nosaukums",
+          "port": "Ports",
+          "unit": "Modbus adrese"
+        }
+      }
+    },
+    "progress": {
+      "scanning": "Notiek meklēšana lokālajā tīklā. Tas aizņem līdz minūtei."
+    },
+    "error": {
+      "cannot_connect": "Šajā adresē neviens neatbild."
+    },
+    "abort": {
+      "already_configured": "Šī iekārta jau ir pievienota.",
+      "reconfigure_successful": "Adrese ir atjaunināta.",
+      "wrong_device": "Šajā adresē ir cita iekārta."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "AlpicAir NEST",
+        "data": {
+          "scan_interval": "Aptaujas intervāls",
+          "show_panel": "Rādīt paneli sānu joslā"
+        }
+      }
+    }
+  },
+  "entity": {
+    "climate": {
+      "nest": {
+        "state_attributes": {
+          "preset_mode": {
+            "state": {
+              "schedule": "Pēc grafika",
+              "unoccupied": "Neviena nav",
+              "economy": "Ekonomija",
+              "comfort": "Komforts",
+              "boost": "Boost",
+              "kitchen_hood": "Virtuves tvaika nosūcējs"
+            }
+          }
+        }
+      }
+    }
+  }
+}

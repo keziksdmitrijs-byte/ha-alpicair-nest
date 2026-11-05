@@ -1,0 +1,94 @@
+{
+  "config": {
+    "flow_title": "{name}",
+    "step": {
+      "user": {
+        "title": "AlpicAir NEST",
+        "description": "How do you want to add the unit?",
+        "menu_options": {
+          "manual": "Enter the IP address",
+          "discover": "Find it automatically"
+        }
+      },
+      "manual": {
+        "title": "Unit address",
+        "description": "Modbus TCP must be enabled on the unit.",
+        "data": {
+          "host": "IP address or host name",
+          "port": "Port",
+          "unit": "Modbus unit ID"
+        },
+        "data_description": {
+          "unit": "Leave empty and the usual addresses are tried."
+        }
+      },
+      "confirm": {
+        "title": "This does not look like a NEST unit",
+        "description": "{host} answers Modbus requests (unit ID {unit}), but not the way a NEST unit does. Add it anyway?"
+      },
+      "discovered": {
+        "title": "Units found",
+        "description": "Units found on the network: {count}.",
+        "data": {
+          "device": "Unit"
+        }
+      },
+      "nothing_found": {
+        "title": "No unit found",
+        "description": "No unit answered on port 502 in the local networks. Check that Modbus TCP is enabled on the unit and that it is on the same network as Home Assistant.",
+        "menu_options": {
+          "discover": "Search again",
+          "manual": "Enter the IP address"
+        }
+      },
+      "reconfigure": {
+        "title": "Unit address",
+        "data": {
+          "host": "IP address or host name",
+          "port": "Port",
+          "unit": "Modbus unit ID"
+        }
+      }
+    },
+    "progress": {
+      "scanning": "Searching the local network. This takes up to a minute."
+    },
+    "error": {
+      "cannot_connect": "Nothing answered at this address."
+    },
+    "abort": {
+      "already_configured": "This unit is already added.",
+      "reconfigure_successful": "The address is updated.",
+      "wrong_device": "That address belongs to another unit."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "AlpicAir NEST",
+        "data": {
+          "scan_interval": "Polling interval",
+          "show_panel": "Show the panel in the sidebar"
+        }
+      }
+    }
+  },
+  "entity": {
+    "climate": {
+      "nest": {
+        "state_attributes": {
+          "preset_mode": {
+            "state": {
+              "schedule": "Schedule",
+              "unoccupied": "Unoccupied",
+              "economy": "Economy",
+              "comfort": "Comfort",
+              "boost": "Boost",
+              "kitchen_hood": "Kitchen hood"
+            }
+          }
+        }
+      }
+    }
+  }
+}

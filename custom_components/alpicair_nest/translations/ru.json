@@ -1,0 +1,94 @@
+{
+  "config": {
+    "flow_title": "{name}",
+    "step": {
+      "user": {
+        "title": "AlpicAir NEST",
+        "description": "Как добавить установку?",
+        "menu_options": {
+          "manual": "Ввести IP-адрес",
+          "discover": "Найти автоматически"
+        }
+      },
+      "manual": {
+        "title": "Адрес установки",
+        "description": "На установке должен быть включён Modbus TCP.",
+        "data": {
+          "host": "IP-адрес или имя хоста",
+          "port": "Порт",
+          "unit": "Адрес Modbus"
+        },
+        "data_description": {
+          "unit": "Оставьте пустым: обычные адреса будут проверены автоматически."
+        }
+      },
+      "confirm": {
+        "title": "Не похоже на установку NEST",
+        "description": "{host} отвечает по Modbus (адрес {unit}), но не так, как установка NEST. Всё равно добавить?"
+      },
+      "discovered": {
+        "title": "Найденные установки",
+        "description": "Найдено установок в сети: {count}.",
+        "data": {
+          "device": "Установка"
+        }
+      },
+      "nothing_found": {
+        "title": "Установка не найдена",
+        "description": "В локальных сетях никто не ответил на порту 502. Проверьте, что на установке включён Modbus TCP и она в одной сети с Home Assistant.",
+        "menu_options": {
+          "discover": "Искать ещё раз",
+          "manual": "Ввести IP-адрес"
+        }
+      },
+      "reconfigure": {
+        "title": "Адрес установки",
+        "data": {
+          "host": "IP-адрес или имя хоста",
+          "port": "Порт",
+          "unit": "Адрес Modbus"
+        }
+      }
+    },
+    "progress": {
+      "scanning": "Идёт поиск в локальной сети. Это занимает до минуты."
+    },
+    "error": {
+      "cannot_connect": "По этому адресу никто не отвечает."
+    },
+    "abort": {
+      "already_configured": "Эта установка уже добавлена.",
+      "reconfigure_successful": "Адрес обновлён.",
+      "wrong_device": "По этому адресу находится другая установка."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "AlpicAir NEST",
+        "data": {
+          "scan_interval": "Интервал опроса",
+          "show_panel": "Показывать панель в боковом меню"
+        }
+      }
+    }
+  },
+  "entity": {
+    "climate": {
+      "nest": {
+        "state_attributes": {
+          "preset_mode": {
+            "state": {
+              "schedule": "По расписанию",
+              "unoccupied": "Никого нет",
+              "economy": "Эконом",
+              "comfort": "Комфорт",
+              "boost": "Буст",
+              "kitchen_hood": "Кухонная вытяжка"
+            }
+          }
+        }
+      }
+    }
+  }
+}
