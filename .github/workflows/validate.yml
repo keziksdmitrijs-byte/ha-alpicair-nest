@@ -33,4 +33,5 @@ jobs:
         run: |
           pip install "$(python -c 'import json, pathlib, homeassistant.components.frontend as f; print(json.loads((pathlib.Path(f.__file__).parent / "manifest.json").read_text())["requirements"][0])')"
       - run: pytest
-      - run: node --check custom_components/alpicair_nest/frontend/alpicair-nest-panel.js
+      - name: The panel must parse as ES2018, for the old WebView on wall panels
+        run: npx --yes acorn@8 --ecma2018 --module --silent custom_components/alpicair_nest/frontend/alpicair-nest-panel.js
