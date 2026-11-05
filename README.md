@@ -6,7 +6,7 @@
 
 Интеграция для рекуператоров **AlpicAir NEST** с контроллером ES1125. Подключается по Modbus TCP напрямую, без облака. Панель настроек, данных, расписания, сервиса и ошибок встроена в интеграцию и появляется в боковом меню Home Assistant.
 
-> **Статус: проверено только на симуляторе.** Интеграция написана по таблице регистров версии 48012 и ещё не запускалась на настоящей установке. Что нужно сверить, перечислено в разделе [«Что проверить на установке»](#что-проверить-на-установке). Пока это не сделано, начинайте с чтения данных и меняйте сервисные настройки осторожно.
+> **Статус: чтение проверено на настоящей установке** (прошивка 49012, таблица регистров 48012): поиск в сети, все показания и настройки. Управление режимами на настоящей установке ещё не проверялось, см. раздел [«Что проверить на установке»](#что-проверить-на-установке). Сервисные настройки меняйте осторожно.
 
 ### Установка
 
@@ -36,6 +36,12 @@
 | Сервис | Настройки оборудования, входов, клапанов, сети; перезапуск, калибровка, точки восстановления |
 | Ошибки | Активные ошибки и предупреждения, сброс, история, слова состояния |
 
+На квадратном экране (SONOFF NSPanel Pro, 480×480) панель сама переходит на отдельную раскладку: всё основное на одном экране, внизу вкладки со значками, у чисел кнопки − и +. Весь экран масштабируется под плотность пикселей устройства. Файл панели рассчитан на старый WebView Android 8.1.
+
+Откройте на панели адрес `/alpicair-nest`. Если в Home Assistant есть `input_select.nspanel_language`, язык берётся из него. Параметры адреса: `?lang=lv` задаёт язык, `?compact=1` включает раскладку на любом экране, `?compact=0` выключает.
+
+Названия регистров существуют на русском и английском. На латышском переведены сама панель и режимы, а названия настроек показываются по-английски.
+
 Кто что может менять:
 
 | Уровень | Кто | Что |
@@ -59,13 +65,18 @@ PIN сверяется с тем, что записан в самой устан
 
 ### Что проверить на установке
 
-Таблица не отвечает на всё, и эти решения приняты по косвенным признакам:
+Проверено на настоящей установке (прошивка 49012):
 
-1. **Типы регистров.** Setpoints читаются как holding (функция 3), Datapoints как input (функция 4), адресация с нуля.
-2. **Порядок битов в словах ошибок.** Принято, что последний пункт списка в таблице это бит 0. Если сообщения об ошибках не совпадают с дисплеем установки, порядок обратный; сырые значения показаны на вкладке «Ошибки».
-3. **Вентиляторы.** Принято, что вентилятор 1 приточный, вентилятор 2 вытяжной.
-4. **Управление режимом.** Чтобы режим не перезаписывался расписанием, сначала ставится `ControlMode = Manual`, затем `OperatingMode`. Кнопка «По расписанию» возвращает `Auto`.
-5. **Уровни доступа.** В таблице у всех регистров указан уровень User, разделение на три уровня сделано здесь.
+- Setpoints читаются функцией 3, Datapoints функцией 4, адресация с нуля. Все 348 настроек лежат в своих диапазонах, недоступных адресов нет.
+- Порядок битов в словах ошибок: сработавший бит совпал с отдельным флагом той же ошибки.
+
+Ещё не проверено:
+
+1. **Вентиляторы.** Принято, что вентилятор 1 приточный, вентилятор 2 вытяжной.
+2. **Управление режимом.** Чтобы режим не перезаписывался расписанием, сначала ставится `ControlMode = Manual`, затем `OperatingMode`. Кнопка «По расписанию» возвращает `Auto`.
+3. **Уровни доступа.** В таблице у всех регистров указан уровень User, разделение на три уровня сделано здесь.
+
+Установка повторяет ошибки и предупреждения в словах Alarm, поэтому одна неисправность показывается одной строкой. Без датчиков давления расход равен нулю, и панель показывает выход вентиляторов в процентах.
 
 Если что-то не сходится, приложите диагностику: страница устройства → **Скачать диагностику**. Адреса и PIN в неё не попадают.
 
@@ -85,7 +96,7 @@ python -m tests.simulator --port 5020 --faults
 
 Local Modbus TCP integration for **AlpicAir NEST** heat-recovery units with the ES1125 controller, with a built-in sidebar panel for settings, schedule, data, service and faults. No cloud.
 
-> **Status: tested on a simulator only.** It was written from register table version 48012 and has not yet run against a real unit. See [What to check on a real unit](#what-to-check-on-a-real-unit).
+> **Status: reading is verified on a real unit** (firmware 49012, register table 48012): network search, all readings and settings. Mode control has not been tried on a real unit yet, see [What to check on a real unit](#what-to-check-on-a-real-unit).
 
 ### Install
 
@@ -97,17 +108,23 @@ Modbus TCP must be enabled on the unit (port 502 by default).
 
 **Settings → Devices & services → Add integration → AlpicAir NEST**, then either enter the IP address or let it search the local networks. The search only reads, and recognises a unit by its registers.
 
+### Square wall panels
+
+On a square screen such as the SONOFF NSPanel Pro (480×480) the panel switches to its own layout, with the essentials on one screen, icon tabs at the bottom and − / + buttons on numbers. It scales to the device's pixel density and stays within what an Android 8.1 WebView can run. Open `/alpicair-nest` on the device. The language follows `input_select.nspanel_language` when that exists; `?lang=lv` sets it, and `?compact=1` or `?compact=0` forces the layout on or off.
+
 ### Access levels
 
 Everyday settings are open to anyone logged in, adjuster settings to administrators, and service settings to administrators who enter the unit's service PIN. The PIN is compared with the one stored in the unit and never kept; access lasts 15 minutes and repeated wrong PINs are locked out. All of this is enforced on the server.
 
 ### What to check on a real unit
 
-1. Setpoints are read as holding registers (function 3), data points as input registers (function 4), zero-based.
-2. Fault words: the last item of the table's list is taken to be bit 0. Raw words are on the Faults tab to compare with the unit's display.
-3. Fan 1 is taken to be supply, fan 2 exhaust.
-4. A mode is set by writing `ControlMode = Manual`, then `OperatingMode`; the Schedule button writes `Auto`.
-5. The table marks every register as User; the three access levels are this integration's own.
+Verified on firmware 49012: holding registers (function 3) for setpoints, input registers (function 4) for data points, zero-based, and the bit order of the fault words.
+
+Not yet verified:
+
+1. Fan 1 is taken to be supply, fan 2 exhaust.
+2. A mode is set by writing `ControlMode = Manual`, then `OperatingMode`; the Schedule button writes `Auto`.
+3. The table marks every register as User; the three access levels are this integration's own.
 
 Diagnostics (device page → **Download diagnostics**) leave out addresses and the PIN.
 
