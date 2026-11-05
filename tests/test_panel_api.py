@@ -194,6 +194,15 @@ async def test_faults(hass, admin, unit, loaded) -> None:
     assert (await _ask(admin, "log"))["result"]["log"] == []
 
 
+async def test_alarm_word_repeats_a_warning_once(hass, unit, loaded) -> None:
+    """A real unit sets the same bit in the warning word and the alarm word."""
+    unit.input[unit.addresses_dp["WarningStatus1"]] = 1 << 11
+    unit.input[unit.addresses_dp["AlarmStatus1"]] = 1 << 11
+    await _poll(hass, loaded)
+    faults = loaded.runtime_data.data.faults
+    assert [(fault["kind"], fault["name"]) for fault in faults] == [("warning", "ERC_Rotary_EfficiencyAlarm")]
+
+
 async def test_refused_address_is_skipped(hass, unit, loaded) -> None:
     coordinator = loaded.runtime_data
     unit.refused_input = {unit.addresses_dp["AI_VOC"]}
