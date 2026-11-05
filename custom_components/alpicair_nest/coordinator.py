@@ -54,6 +54,7 @@ MIN_DELTA_FOR_EFFICIENCY = 3.0
 ILLEGAL_FUNCTION = 1
 ILLEGAL_ADDRESS = 2
 CLOCK_START = 602  # Min, Hour, Day, Date, Month, Year
+FAULT_ORDER = ("error", "warning", "alarm")
 
 
 @dataclass(slots=True)
@@ -246,24 +247,26 @@ class NestCoordinator(DataUpdateCoordinator[NestData]):
         self._loaded = True
 
     def _active_faults(self, data: NestData) -> list[dict[str, Any]]:
-        active = []
-        for word in self._words:
+        """The bits that are set. A unit repeats its errors and warnings in the alarm words: one line each."""
+        active: dict[str, dict[str, Any]] = {}
+        for word in sorted(self._words, key=lambda w: FAULT_ORDER.index(w.fault)):
             raw = data.dp.get(word.address)
             if not raw:
                 continue
             for bit in range(16):
                 if raw & (1 << bit):
                     name = word.bits.get(str(bit))
-                    active.append(
+                    active.setdefault(
+                        name or f"{word.name}.{bit}",
                         {
                             "id": f"{word.fault}:{name or f'{word.name}.{bit}'}",
                             "name": name,
                             "kind": word.fault,
                             "word": word.name,
                             "bit": bit,
-                        }
+                        },
                     )
-        return active
+        return list(active.values())
 
     def _track_faults(self, data: NestData) -> None:
         data.faults = self._active_faults(data)
