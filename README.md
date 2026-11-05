@@ -36,11 +36,21 @@
 | Сервис | Настройки оборудования, входов, клапанов, сети; перезапуск, калибровка, точки восстановления |
 | Ошибки | Активные ошибки и предупреждения, сброс, история, слова состояния |
 
-На квадратном экране (SONOFF NSPanel Pro, 480×480) панель сама переходит на отдельную раскладку: всё основное на одном экране, внизу вкладки со значками, у чисел кнопки − и +. Весь экран масштабируется под плотность пикселей устройства. Файл панели рассчитан на старый WebView Android 8.1.
+### Панель для NSPanel Pro
 
-Откройте на панели адрес `/alpicair-nest`. Если в Home Assistant есть `input_select.nspanel_language`, язык берётся из него. Параметры адреса: `?lang=lv` задаёт язык, `?compact=1` включает раскладку на любом экране, `?compact=0` выключает.
+Для квадратного SONOFF NSPanel Pro (480×480) есть отдельная панель: пункт **NEST NSPanel** в боковом меню, адрес `/alpicair-nest-wall`. Она рисуется под палец и не требует экранной клавиатуры: числа меняются кнопками − и +, ползунком или встроенной цифровой клавиатурой.
 
-Названия регистров существуют на русском и английском. На латышском переведены сама панель и режимы, а названия настроек показываются по-английски.
+- **Главный экран:** режим, цель с кнопками − и +, четыре температуры, вентиляторы, влажность.
+- **Меню:** Режим, Климат, Вентиляция, Качество воздуха, Расписание, Показания, Ошибки, Система, Сервис.
+- **Подменю:** через них доступна каждая из 368 настроек установки. Сервис открывается PIN-клавиатурой.
+- **Расписание:** неделя, правка событий, копирование дня.
+- Через две минуты без касаний панель возвращается на главный экран и закрывает сервис. Назад можно вернуться кнопкой или свайпом вправо.
+
+Язык, тема и цвет меняются в **Система → Экран панели**. Если в Home Assistant есть `input_select.nspanel_language`, `input_select.nspanel_theme` и `input_select.nspanel_accent`, панель берёт значения из них. Иначе выбор хранится на устройстве.
+
+Параметры адреса: `?lang=lv`, `?theme=dark`, `?accent=teal`, `?home=/путь` (куда вести кнопка выхода), `?unit=<entry_id>`. Показ в боковом меню отключается в **Настроить**.
+
+Файл панели рассчитан на старый WebView Android 8.1, это проверяет `tests/check_panels.js`. Есть и второй вариант: основная панель на квадратном экране сама переходит на компактную раскладку (`/alpicair-nest`, `?compact=1` или `?compact=0`).
 
 Кто что может менять:
 
@@ -110,7 +120,9 @@ Modbus TCP must be enabled on the unit (port 502 by default).
 
 ### Square wall panels
 
-On a square screen such as the SONOFF NSPanel Pro (480×480) the panel switches to its own layout, with the essentials on one screen, icon tabs at the bottom and − / + buttons on numbers. It scales to the device's pixel density and stays within what an Android 8.1 WebView can run. Open `/alpicair-nest` on the device. The language follows `input_select.nspanel_language` when that exists; `?lang=lv` sets it, and `?compact=1` or `?compact=0` forces the layout on or off.
+The SONOFF NSPanel Pro (480×480) has a panel of its own: **NEST NSPanel** in the sidebar, at `/alpicair-nest-wall`. It has a home screen, a menu and submenus that reach all 368 settings, a schedule editor, faults and service access with an on-screen PIN pad, and it needs no on-screen keyboard. It returns to the home screen after two minutes without a touch.
+
+Language, theme and accent are set under **System → Panel screen**, and follow `input_select.nspanel_language`, `input_select.nspanel_theme` and `input_select.nspanel_accent` when those exist. URL parameters: `?lang=lv`, `?theme=dark`, `?accent=teal`, `?home=/path` and `?unit=<entry_id>`. It stays within what an Android 8.1 WebView can run, which `tests/check_panels.js` enforces.
 
 ### Access levels
 
