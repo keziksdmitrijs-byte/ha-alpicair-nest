@@ -1,0 +1,10 @@
+line-length = 120
+target-version = "py313"
+
+[lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "ASYNC", "RUF"]
+ignore = ["RUF001", "RUF003"]
+
+[lint.per-file-ignores]
+"scripts/*" = ["E501", "B007"]
+"custom_components/alpicair_nest/climate.py" = ["RUF012"]
