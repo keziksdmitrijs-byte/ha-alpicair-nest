@@ -18,6 +18,7 @@ from .client import ModbusClient, ModbusError
 from .const import (
     CONF_FRAMING,
     CONF_SHOW_PANEL,
+    CONF_SHOW_WALL,
     CONF_UNIT,
     DOMAIN,
     FRAMING_TCP,
@@ -26,6 +27,10 @@ from .const import (
     PANEL_ICON,
     PANEL_URL,
     STATIC_URL,
+    WALL_ELEMENT,
+    WALL_ICON,
+    WALL_TITLE,
+    WALL_URL,
 )
 from .coordinator import NestCoordinator
 from .registers import async_load_registers
@@ -95,28 +100,35 @@ async def _async_options_changed(hass: HomeAssistant, entry: NestConfigEntry) ->
 
 
 async def _async_update_panel(hass: HomeAssistant, entries: list[ConfigEntry]) -> None:
-    """The sidebar item exists while a loaded unit wants it."""
-    wanted = any(entry.options.get(CONF_SHOW_PANEL, True) for entry in entries)
+    """Each sidebar item exists while a loaded unit wants it."""
     state = hass.data.setdefault(DOMAIN, {})
+    wanted = {
+        PANEL_URL: any(entry.options.get(CONF_SHOW_PANEL, True) for entry in entries),
+        WALL_URL: any(entry.options.get(CONF_SHOW_WALL, True) for entry in entries),
+    }
+    if any(wanted.values()) and not state.get("static"):
+        folder = Path(__file__).parent / "frontend"
+        await hass.http.async_register_static_paths([StaticPathConfig(STATIC_URL, str(folder), cache_headers=False)])
+        state["static"] = True
 
-    if wanted and not state.get("panel"):
-        version = (await async_get_integration(hass, DOMAIN)).version
-        if not state.get("static"):
-            folder = Path(__file__).parent / "frontend"
-            await hass.http.async_register_static_paths(
-                [StaticPathConfig(STATIC_URL, str(folder), cache_headers=False)]
+    panels = {
+        PANEL_URL: (PANEL_ELEMENT, NAME, PANEL_ICON),
+        WALL_URL: (WALL_ELEMENT, WALL_TITLE, WALL_ICON),
+    }
+    shown = state.setdefault("panels", set())
+    version = (await async_get_integration(hass, DOMAIN)).version
+    for url, (element, title, icon) in panels.items():
+        if wanted[url] and url not in shown:
+            await panel_custom.async_register_panel(
+                hass,
+                webcomponent_name=element,
+                frontend_url_path=url,
+                module_url=f"{STATIC_URL}/{element}.js?v={version}",
+                sidebar_title=title,
+                sidebar_icon=icon,
+                require_admin=False,
             )
-            state["static"] = True
-        await panel_custom.async_register_panel(
-            hass,
-            webcomponent_name=PANEL_ELEMENT,
-            frontend_url_path=PANEL_URL,
-            module_url=f"{STATIC_URL}/{PANEL_ELEMENT}.js?v={version}",
-            sidebar_title=NAME,
-            sidebar_icon=PANEL_ICON,
-            require_admin=False,
-        )
-        state["panel"] = True
-    elif not wanted and state.get("panel"):
-        frontend.async_remove_panel(hass, PANEL_URL)
-        state["panel"] = False
+            shown.add(url)
+        elif not wanted[url] and url in shown:
+            frontend.async_remove_panel(hass, url)
+            shown.discard(url)

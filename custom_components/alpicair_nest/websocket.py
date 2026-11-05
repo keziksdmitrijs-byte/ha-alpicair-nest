@@ -90,7 +90,8 @@ def _with_coordinator(handler):
 
 
 def _serving(language: str) -> str:
-    return "ru" if language.split("-")[0] == "ru" else "en"
+    code = language.split("-")[0]
+    return code if code in ("ru", "lv") else "en"
 
 
 def _describe(register: Register, language: str) -> dict[str, Any]:

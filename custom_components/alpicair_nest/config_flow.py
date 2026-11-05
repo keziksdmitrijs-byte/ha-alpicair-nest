@@ -21,6 +21,7 @@ from .const import (
     CONF_MAC,
     CONF_SCAN_INTERVAL,
     CONF_SHOW_PANEL,
+    CONF_SHOW_WALL,
     CONF_UNIT,
     DEFAULT_PORT,
     DEFAULT_SCAN_INTERVAL,
@@ -184,7 +185,7 @@ class NestConfigFlow(ConfigFlow, domain=DOMAIN):
                 CONF_FRAMING: unit.framing or FRAMING_TCP,
                 CONF_MAC: unit.mac,
             },
-            options={CONF_SCAN_INTERVAL: DEFAULT_SCAN_INTERVAL, CONF_SHOW_PANEL: True},
+            options={CONF_SCAN_INTERVAL: DEFAULT_SCAN_INTERVAL, CONF_SHOW_PANEL: True, CONF_SHOW_WALL: True},
         )
 
     async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
@@ -232,6 +233,7 @@ class NestOptionsFlow(OptionsFlow):
                 data={
                     CONF_SCAN_INTERVAL: int(user_input[CONF_SCAN_INTERVAL]),
                     CONF_SHOW_PANEL: user_input[CONF_SHOW_PANEL],
+                    CONF_SHOW_WALL: user_input[CONF_SHOW_WALL],
                 }
             )
         options = self.config_entry.options
@@ -253,6 +255,7 @@ class NestOptionsFlow(OptionsFlow):
                     vol.Required(
                         CONF_SHOW_PANEL, default=options.get(CONF_SHOW_PANEL, True)
                     ): selector.BooleanSelector(),
+                    vol.Required(CONF_SHOW_WALL, default=options.get(CONF_SHOW_WALL, True)): selector.BooleanSelector(),
                 }
             ),
         )

@@ -14,6 +14,7 @@ CONF_FRAMING: Final = "framing"
 CONF_MAC: Final = "mac"
 CONF_SCAN_INTERVAL: Final = "scan_interval"
 CONF_SHOW_PANEL: Final = "show_panel"
+CONF_SHOW_WALL: Final = "show_wall"
 
 DEFAULT_PORT: Final = 502
 DEFAULT_SCAN_INTERVAL: Final = 10
@@ -88,4 +89,8 @@ PIN_LOCK_SECONDS: Final = 60
 PANEL_URL: Final = "alpicair-nest"
 PANEL_ELEMENT: Final = "alpicair-nest-panel"
 PANEL_ICON: Final = "mdi:air-filter"
+WALL_URL: Final = "alpicair-nest-wall"
+WALL_ELEMENT: Final = "alpicair-nest-wall"
+WALL_TITLE: Final = "NEST NSPanel"
+WALL_ICON: Final = "mdi:tablet-dashboard"
 STATIC_URL: Final = "/alpicair_nest_static"
