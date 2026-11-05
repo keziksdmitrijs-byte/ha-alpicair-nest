@@ -1,7 +1,16 @@
-/* AlpicAir NEST panel for Home Assistant. No build step, no dependencies. */
+/* AlpicAir NEST panel for Home Assistant. No build step, no dependencies.
+ *
+ * Wall panels run old browsers: the NSPanel Pro has Android 8.1 and its WebView can be Chromium 61.
+ * So this file stays within ES2018, without ?. and ??, and every newer CSS feature has a fallback.
+ */
 
 const DOMAIN = "alpicair_nest";
 const TABS = ["overview", "settings", "schedule", "data", "service", "faults"];
+const QUERY = new URLSearchParams(location.search);
+// a square screen of about this many pixels gets the layout drawn for it, scaled to fit
+const WALL_SIZE = 480;
+const WALL_LIMIT = 800;
+const WALL_LANGUAGE = "input_select.nspanel_language";
 const DAYS_IN_WEEK = 7;
 const EVENTS_IN_DAY = 10;
 const TARGET_STEP = 0.5;
@@ -155,8 +164,27 @@ STRINGS.lv = {
   appeared: "parādījās", cleared: "pazuda", kinds: { error: "Kļūda", warning: "Brīdinājums", alarm: "Trauksme" },
 };
 
+const or = (value, other) => (value === null || value === undefined ? other : value);
+
+const byName = (items) => {
+  const table = {};
+  items.forEach((item) => {
+    table[item.name] = item;
+  });
+  return table;
+};
+
 const esc = (text) =>
-  String(text ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  String(or(text, "")).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+
+const ICONS = {
+  overview: "M4 11l8-7 8 7v9h-5v-6H9v6H4z",
+  settings: "M3 7h11M18 7h3M3 17h3M10 17h11M16 5v4M8 15v4",
+  schedule: "M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18zM12 7v5l3 2",
+  data: "M5 20V11M12 20V4M19 20v-7",
+  service: "M7 11V8a5 5 0 0 1 10 0v3M5 11h14v9H5z",
+  faults: "M12 4l9 16H3zM12 10v5M12 17.5v.5",
+};
 
 const STYLE = `
 :host {
@@ -171,6 +199,7 @@ const STYLE = `
   --nest-error: var(--error-color, #db4437);
   --nest-warning: var(--warning-color, #e6a100);
   --nest-success: var(--success-color, #2e9d57);
+  --nest-soft: var(--secondary-background-color, rgba(127, 127, 127, .14));
   display: block; min-height: 100%; box-sizing: border-box;
   background: var(--primary-background-color, #f5f5f5); color: var(--nest-text);
   font-family: var(--ha-font-family-body, var(--paper-font-body1_-_font-family, Roboto, system-ui, sans-serif));
@@ -206,8 +235,8 @@ main { max-width: 1120px; margin: 0 auto; padding: 16px; }
 h2 { margin: 0 0 10px; font-size: 16px; font-weight: 500; }
 .muted { color: var(--nest-muted); }
 .small { font-size: 12px; }
-.banner { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; padding: 10px 14px; border-radius: 10px; background: color-mix(in srgb, var(--nest-error) 14%, var(--nest-card)); border: 1px solid var(--nest-error); }
-.banner.info { background: color-mix(in srgb, var(--nest-warning) 14%, var(--nest-card)); border-color: var(--nest-warning); }
+.banner { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; padding: 10px 14px; border-radius: 10px; background: var(--nest-card); background: color-mix(in srgb, var(--nest-error) 14%, var(--nest-card)); border: 1px solid var(--nest-error); }
+.banner.info { background: var(--nest-card); background: color-mix(in srgb, var(--nest-warning) 14%, var(--nest-card)); border-color: var(--nest-warning); }
 .banner > span { flex: 1; }
 button.btn, input, select { font: inherit; color: inherit; }
 button.btn {
@@ -226,8 +255,8 @@ input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px s
 :host([narrow]) .overview { grid-template-columns: minmax(0, 1fr); }
 .overview .card + .card { margin-top: 0; }
 .span { grid-column: 1 / -1; }
-.scheme { position: relative; aspect-ratio: 52 / 30; min-height: 230px; width: 100%; }
-.scheme svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.scheme { position: relative; height: 0; padding-bottom: 57.7%; min-height: 230px; width: 100%; }
+.scheme svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
 .port { position: absolute; display: flex; flex-direction: column; min-width: 92px; padding: 2px 6px; background: var(--nest-card); border-radius: 6px; }
 .port b { font-size: 22px; font-weight: 500; line-height: 1.2; white-space: nowrap; }
 .port span { color: var(--nest-muted); font-size: 12px; white-space: nowrap; }
@@ -275,14 +304,14 @@ input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px s
 .sections { display: flex; flex-direction: column; gap: 2px; position: sticky; top: calc(var(--header-height, 56px) + 60px); }
 :host([narrow]) .sections { position: static; flex-direction: row; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
 .sections button { flex: none; display: flex; justify-content: space-between; gap: 8px; padding: 8px 10px; border: 0; border-radius: 8px; background: none; color: var(--nest-text); font: inherit; text-align: left; cursor: pointer; }
-.sections button[aria-current="true"] { background: color-mix(in srgb, var(--nest-accent) 16%, transparent); color: var(--nest-accent); font-weight: 500; }
+.sections button[aria-current="true"] { background: var(--nest-soft); background: color-mix(in srgb, var(--nest-accent) 16%, transparent); color: var(--nest-accent); font-weight: 500; }
 .sections span { color: var(--nest-muted); font-weight: 400; }
 .finder { width: 100%; margin-bottom: 12px; }
 .rows { min-width: 0; padding: 4px 16px; }
 .rows h3 { margin: 14px 0 4px; color: var(--nest-muted); font-size: 12px; font-weight: 500; text-transform: uppercase; letter-spacing: .04em; }
 .row { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 7px 0; border-bottom: 1px solid var(--nest-line); }
 .row:last-child { border-bottom: 0; }
-.row-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.row-text { flex: 1; min-width: 0; word-break: break-word; overflow-wrap: anywhere; }
 .row-meta { color: var(--nest-muted); font-size: 12px; }
 .row-control { display: flex; align-items: center; justify-content: flex-end; gap: 6px; flex: none; max-width: 60%; }
 .row-control input[type="number"] { width: 96px; text-align: right; }
@@ -292,8 +321,8 @@ input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px s
 .unit { color: var(--nest-muted); font-size: 12px; min-width: 34px; }
 .value { font-variant-numeric: tabular-nums; text-align: right; }
 .toggle { position: relative; width: 44px; height: 24px; flex: none; }
-.toggle input { position: absolute; inset: 0; margin: 0; min-height: 0; opacity: 0; cursor: pointer; }
-.toggle i { position: absolute; inset: 0; border-radius: 12px; background: var(--nest-line); pointer-events: none; transition: background .15s; }
+.toggle input { position: absolute; top: 0; left: 0; width: 100%; height: 100%; margin: 0; min-height: 0; opacity: 0; cursor: pointer; }
+.toggle i { position: absolute; top: 0; left: 0; right: 0; bottom: 0; border-radius: 12px; background: var(--nest-line); pointer-events: none; transition: background .15s; }
 .toggle i::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .3); transition: left .15s; }
 .toggle input:checked + i { background: var(--nest-accent); }
 .toggle input:checked + i::after { left: 23px; }
@@ -306,7 +335,7 @@ input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px s
 /* schedule */
 .week { display: grid; gap: 4px; }
 .week button { display: grid; grid-template-columns: 36px minmax(0, 1fr); align-items: center; gap: 8px; padding: 2px; border: 0; border-radius: 6px; background: none; color: inherit; font: inherit; cursor: pointer; text-align: left; }
-.week button[aria-current="true"] { background: color-mix(in srgb, var(--nest-accent) 14%, transparent); }
+.week button[aria-current="true"] { background: var(--nest-soft); background: color-mix(in srgb, var(--nest-accent) 14%, transparent); }
 .line { position: relative; height: 18px; border-radius: 4px; background: var(--nest-line); overflow: hidden; }
 .line i { position: absolute; top: 0; bottom: 0; }
 .m1 { background: #8d939c; } .m2 { background: #7fb2dd; } .m3 { background: #4c9f70; } .m4 { background: #e0a23c; } .m5 { background: #d9562b; }
@@ -335,12 +364,78 @@ input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px s
 /* faults */
 .fault { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--nest-line); }
 .fault:last-child { border-bottom: 0; }
-.fault > span:nth-child(2) { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.fault > span:nth-child(2) { flex: 1; min-width: 0; word-break: break-word; overflow-wrap: anywhere; }
 .kind { flex: none; padding: 2px 8px; border-radius: 10px; font-size: 12px; color: #fff; background: var(--nest-error); }
 .kind.warning { background: var(--nest-warning); color: #000; }
 .kind.alarm { background: var(--nest-stale); }
 .kind.gone { background: var(--nest-line); color: var(--nest-muted); }
 .words { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 4px 16px; font-family: var(--code-font-family, monospace); font-size: 12px; }
+
+.tab-icon { display: none; }
+.stepper { display: none; }
+
+/* square wall panel: everything on one 480 x 480 screen, drawn for fingers */
+:host([compact]) { display: flex; flex-direction: column; min-height: 0; overflow: hidden; font-size: 15px; }
+:host([compact]) header { position: static; flex: none; height: 40px; padding: 0 8px 0 0; }
+:host([compact]) header h1 { margin-left: 2px; font-size: 15px; font-weight: 500; }
+:host([compact]) .menu { display: block; flex: none; }
+:host([compact]) .status { margin-left: 8px; }
+:host([compact]) .status span { display: none; }
+:host([compact]) .status.bad span { display: inline; }
+:host([compact]) nav.tabs {
+  position: static; order: 3; flex: none; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr));
+  height: 54px; padding: 0; overflow: hidden; border-bottom: 0; border-top: 1px solid var(--nest-line);
+}
+:host([compact]) nav.tabs button {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 0; padding: 2px 0 0;
+  border-bottom: 0; font-size: 11px; font-weight: 400; white-space: nowrap;
+}
+:host([compact]) .tab-icon { display: block; width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+:host([compact]) .count { position: absolute; top: 2px; left: 50%; margin-left: 8px; min-width: 16px; padding: 0 4px; font-size: 11px; line-height: 16px; }
+:host([compact]) main { flex: 1; min-height: 0; width: 100%; max-width: none; padding: 6px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+:host([compact]) .card { padding: 8px 10px; }
+:host([compact]) .card + .card { margin-top: 6px; }
+:host([compact]) .overview { grid-template-columns: minmax(0, 1fr); gap: 6px; grid-gap: 6px; }
+:host([compact]) .overview .card + .card { margin-top: 0; }
+:host([compact]) #faults-banner, :host([compact]) #chips, :host([compact]) #now, :host([compact]) .control h2 { display: none !important; }
+:host([compact]) .overview .card:first-child { padding: 4px 8px; }
+:host([compact]) .scheme { height: 122px; min-height: 0; padding-bottom: 0; }
+:host([compact]) .port { min-width: 0; padding: 0 2px; }
+:host([compact]) .port b { font-size: 20px; }
+:host([compact]) .core-text { font-size: 26px; transform: translateY(7px); }
+:host([compact]) .core-sub { display: none; }
+:host([compact]) .control { display: flex; flex-direction: column; padding: 0; background: none; border: 0; }
+:host([compact]) .target { order: -1; height: 52px; margin: 0 0 6px; padding: 0; border-top: 0; }
+:host([compact]) .target > div { margin: 0 8px; }
+:host([compact]) .target b { font-size: 26px; }
+:host([compact]) .target button { width: 64px; height: 52px; flex: none; }
+:host([compact]) .modes { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; grid-gap: 6px; }
+:host([compact]) .modes .wide { grid-column: 1 / -1; }
+:host([compact]) .modes button { min-height: 54px; padding: 4px; font-size: 15px; }
+:host([compact]) .tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; grid-gap: 6px; }
+:host([compact]) .tile { padding: 8px; }
+:host([compact]) .tile b { font-size: 17px; }
+:host([compact]) .finder { display: none; }
+:host([compact]) .browser { grid-template-columns: minmax(0, 1fr); gap: 6px; grid-gap: 6px; }
+:host([compact]) .sections { position: static; flex-direction: row; overflow-x: auto; padding-bottom: 2px; }
+:host([compact]) .sections button { min-height: 44px; padding: 8px 12px; align-items: center; }
+:host([compact]) .sections span { margin-left: 8px; }
+:host([compact]) .rows { padding: 2px 10px; }
+:host([compact]) .row { min-height: 60px; }
+:host([compact]) .row-control { max-width: 66%; gap: 0; }
+:host([compact]) .row-control > * + * { margin-left: 4px; }
+:host([compact]) .row-control input[type="number"] { width: 72px; height: 44px; padding: 4px; text-align: center; }
+:host([compact]) .row-control select { height: 44px; max-width: 190px; }
+:host([compact]) .stepper { display: block; width: 44px; min-height: 44px; padding: 0; font-size: 20px; }
+:host([compact]) .unit { min-width: 0; }
+:host([compact]) .event { grid-template-columns: 112px minmax(0, 1fr) 58px 40px; gap: 4px; grid-gap: 4px; }
+:host([compact]) .event .btn { width: 40px; padding: 0; }
+:host([compact]) .event input, :host([compact]) .event select { height: 44px; }
+:host([compact]) .actions { gap: 0; margin-top: 8px; }
+:host([compact]) .actions > * { margin: 0 8px 6px 0; }
+:host([compact]) .btn { min-height: 44px; }
+:host([compact]) .lockbox { margin: 8px auto; }
+:host([compact]) .toast { bottom: 62px; }
 
 dialog { max-width: 420px; padding: 20px; border: 0; border-radius: 12px; background: var(--nest-card); color: var(--nest-text); }
 dialog::backdrop { background: rgba(0, 0, 0, .45); }
@@ -363,7 +458,9 @@ class AlpicAirNestPanel extends HTMLElement {
     this._token = null;
     this._tokenUntil = 0;
     this._pending = {};
+    this._stepTimers = {};
     this._targetTimer = null;
+    this._onResize = () => this._fit();
     this._onHash = () => {
       const tab = location.hash.slice(1);
       if (TABS.includes(tab) && tab !== this._tab) this._openTab(tab);
@@ -384,7 +481,8 @@ class AlpicAirNestPanel extends HTMLElement {
   }
 
   set narrow(value) {
-    this.toggleAttribute("narrow", Boolean(value));
+    this._narrow = Boolean(value);
+    this._fit();
   }
 
   set panel(_value) {}
@@ -395,20 +493,55 @@ class AlpicAirNestPanel extends HTMLElement {
     if (this._hass && !this._started) this._start();
     this._clock = setInterval(() => this._tick(), 1000);
     window.addEventListener("hashchange", this._onHash);
+    window.addEventListener("resize", this._onResize);
+    this._fit();
   }
 
   disconnectedCallback() {
     clearInterval(this._clock);
     window.removeEventListener("hashchange", this._onHash);
-    this._unsubscribe?.then((off) => off()).catch(() => {});
-    this._unsubscribe = null;
+    window.removeEventListener("resize", this._onResize);
+    this._leave();
     this._started = false;
+  }
+
+  _leave() {
+    if (this._unsubscribe) this._unsubscribe.then((off) => off()).catch(() => {});
+    this._unsubscribe = null;
+  }
+
+  // layout
+
+  _setAttribute(name, on) {
+    if (on) this.setAttribute(name, "");
+    else this.removeAttribute(name);
+  }
+
+  _fit() {
+    const parent = this.parentElement || document.documentElement;
+    const box = parent.getBoundingClientRect();
+    const width = box.width || window.innerWidth;
+    const height = window.innerHeight - Math.max(0, box.top);
+    const wanted = QUERY.get("compact");
+    const square = Math.max(width, height) <= WALL_LIMIT && Math.abs(width - height) <= 0.2 * Math.max(width, height);
+    const compact = wanted === "1" || (wanted !== "0" && square);
+    const changed = compact !== this._compact;
+    this._compact = compact;
+    this._setAttribute("compact", compact);
+    this._setAttribute("narrow", compact || this._narrow);
+    // screens differ in pixel density: the design stays 480 wide and the whole of it is scaled
+    const zoom = compact ? Math.min(2, Math.max(0.5, Math.min(width, height) / WALL_SIZE)) : 1;
+    this.style.zoom = compact ? zoom : "";
+    this.style.height = compact ? `${height / zoom}px` : "";
+    if (changed && this._ready) this._render();
   }
 
   // text
 
   get _lang() {
-    const language = (this._hass?.language || "en").split("-")[0];
+    const states = this._hass ? this._hass.states : {};
+    const wall = this._compact ? states[WALL_LANGUAGE] : null;
+    const language = (QUERY.get("lang") || (wall && wall.state) || (this._hass && this._hass.language) || "en").split("-")[0];
     return STRINGS[language] ? language : "en";
   }
 
@@ -422,29 +555,31 @@ class AlpicAirNestPanel extends HTMLElement {
   }
 
   _unit(unit) {
-    return this._t.units[unit] ?? unit ?? "";
+    return or(this._t.units[unit], or(unit, ""));
   }
 
   _reading(name, decimals) {
     const item = this._datapoints[name];
     const value = this._dp[name];
     if (value === null || value === undefined) return "—";
-    if (item?.options) return item.options[value] ?? String(value);
-    const text = this._number(value, decimals ?? item?.decimals ?? 0);
-    const unit = this._unit(item?.unit);
+    if (item && item.options) return or(item.options[value], String(value));
+    const text = this._number(value, or(decimals, item ? item.decimals : 0));
+    const unit = this._unit(item ? item.unit : "");
     return unit ? `${text} ${unit}` : text;
   }
 
   _problem(err) {
     const texts = this._t.errors;
-    const text = texts[err?.code] ?? texts.other;
-    return typeof text === "function" ? text(err?.message) : text;
+    const failure = err || {};
+    const text = or(texts[failure.code], texts.other);
+    return typeof text === "function" ? text(failure.message) : text;
   }
 
   // start
 
   async _start() {
     this._started = true;
+    this._fit();
     this._render();
     try {
       const info = await this._hass.callWS({ type: `${DOMAIN}/info` });
@@ -455,10 +590,11 @@ class AlpicAirNestPanel extends HTMLElement {
         this._render();
         return;
       }
-      this._entry = this._units.find((unit) => unit.entry_id === this._entry)?.entry_id ?? this._units[0].entry_id;
+      const known = this._units.find((unit) => unit.entry_id === this._entry);
+      this._entry = (known || this._units[0]).entry_id;
       await this._load();
     } catch (err) {
-      this._fatal = err?.code === "unknown_command" ? this._t.noUnit : this._problem(err);
+      this._fatal = err && err.code === "unknown_command" ? this._t.noUnit : this._problem(err);
       this._render();
     }
   }
@@ -466,8 +602,8 @@ class AlpicAirNestPanel extends HTMLElement {
   async _load() {
     const schema = await this._call("schema", { language: this._lang });
     this._schema = schema;
-    this._datapoints = Object.fromEntries(schema.datapoints.map((item) => [item.name, item]));
-    this._setpoints = Object.fromEntries(schema.setpoints.map((item) => [item.name, item]));
+    this._datapoints = byName(schema.datapoints);
+    this._setpoints = byName(schema.setpoints);
     this._loadedLang = this._lang;
     this._unsubscribe = this._hass.connection.subscribeMessage((event) => this._onEvent(event), {
       type: `${DOMAIN}/subscribe`,
@@ -501,7 +637,7 @@ class AlpicAirNestPanel extends HTMLElement {
           <button class="menu" data-action="menu" aria-label="Menu">
             <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
           </button>
-          <h1>${esc(t.title)}</h1><span id="units"></span>
+          <h1 id="title">${esc(t.title)}</h1><span id="units"></span>
           <span class="status" id="status"><i class="dot"></i><span></span></span>
         </header>
         <nav class="tabs" role="tablist"></nav>
@@ -513,7 +649,7 @@ class AlpicAirNestPanel extends HTMLElement {
     }
     const units = root.getElementById("units");
     units.innerHTML =
-      this._units?.length > 1
+      this._units && this._units.length > 1
         ? `<select data-unit aria-label="Unit">${this._units
             .map((u) => `<option value="${esc(u.entry_id)}" ${u.entry_id === this._entry ? "selected" : ""}>${esc(u.title)}</option>`)
             .join("")}</select>`
@@ -530,7 +666,8 @@ class AlpicAirNestPanel extends HTMLElement {
     const t = this._t;
     const count = this._status.faults.length;
     this.shadowRoot.querySelector("nav.tabs").innerHTML = TABS.map(
-      (tab) => `<button role="tab" aria-selected="${tab === this._tab}" data-action="tab" data-tab="${tab}">${esc(t.tabs[tab])}${
+      (tab) => `<button role="tab" aria-selected="${tab === this._tab}" data-action="tab" data-tab="${tab}">
+        <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="${ICONS[tab]}"/></svg>${esc(t.tabs[tab])}${
         tab === "faults" && count ? `<span class="count">${count}</span>` : ""
       }</button>`
     ).join("");
@@ -565,7 +702,7 @@ class AlpicAirNestPanel extends HTMLElement {
     root.querySelectorAll("[data-dp]").forEach((node) => {
       const item = this._datapoints[node.dataset.dp];
       const value = this._dp[node.dataset.dp];
-      if (item?.flag) node.innerHTML = `<i class="lamp ${value ? "on" : ""}"></i>${esc(value ? this._t.on : this._t.offState)}`;
+      if (item && item.flag) node.innerHTML = `<i class="lamp ${value ? "on" : ""}"></i>${esc(value ? this._t.on : this._t.offState)}`;
       else node.textContent = this._reading(node.dataset.dp);
     });
     root.querySelectorAll("[data-name]").forEach((node) => this._fillControl(node));
@@ -573,11 +710,14 @@ class AlpicAirNestPanel extends HTMLElement {
   }
 
   _fillControl(node) {
-    if (node === this.shadowRoot.activeElement) return;
+    if (node === this.shadowRoot.activeElement || this._pending[node.dataset.name]) return;
     const value = this._sp[node.dataset.name];
     if (value === null || value === undefined) return;
     if (node.type === "checkbox") node.checked = Boolean(value);
-    else if (node.tagName === "SPAN") node.textContent = this._setpoints[node.dataset.name]?.options?.[value] ?? this._number(value, this._setpoints[node.dataset.name]?.decimals);
+    else if (node.tagName === "SPAN") {
+      const item = this._setpoints[node.dataset.name] || {};
+      node.textContent = or((item.options || {})[value], this._number(value, item.decimals));
+    }
     else if (String(node.value) !== String(value)) node.value = value;
   }
 
@@ -597,7 +737,7 @@ class AlpicAirNestPanel extends HTMLElement {
       <div class="overview">
         <div class="card">
           <div class="scheme" id="scheme">
-            <svg viewBox="0 0 520 300" aria-hidden="true">
+            <svg viewBox="${this._compact ? "50 34 420 232" : "0 0 520 300"}" aria-hidden="true">
               <rect class="body" x="120" y="44" width="280" height="212" rx="14"/>
               <path class="flow fresh" d="M60 62 H150 L370 238 H460"/>
               <path class="flow stale" d="M460 62 H370 L150 238 H60"/>
@@ -616,7 +756,7 @@ class AlpicAirNestPanel extends HTMLElement {
           </div>
           <div class="chips" id="chips"></div>
         </div>
-        <div class="card">
+        <div class="card control">
           <h2>${esc(t.control)}</h2>
           <div class="modes">
             <button class="btn wide" data-action="auto" aria-pressed="false">${esc(t.scheduleMode)}</button>
@@ -646,7 +786,7 @@ class AlpicAirNestPanel extends HTMLElement {
 
   _targetName() {
     const side = this._sp.AirTemp_ControlStrategy === 1 ? "Extract" : "Supply";
-    const mode = { 1: "Unoccupied", 2: "Economy", 3: "Comfort" }[this._dp.CurrentOperatingMode] ?? "Comfort";
+    const mode = or({ 1: "Unoccupied", 2: "Economy", 3: "Comfort" }[this._dp.CurrentOperatingMode], "Comfort");
     return `AirTemp_${side}Target_${mode}`;
   }
 
@@ -667,7 +807,7 @@ class AlpicAirNestPanel extends HTMLElement {
     const running = dp.CurrentOperatingMode !== 0 && dp.CurrentOperatingMode !== undefined;
     const scheme = root.getElementById("scheme");
     scheme.classList.toggle("running", running);
-    const spin = (output) => `${Math.max(0.35, 3 - (output ?? 0) / 40).toFixed(2)}s`;
+    const spin = (output) => `${Math.max(0.35, 3 - or(output, 0) / 40).toFixed(2)}s`;
     root.getElementById("fan-supply").style.setProperty("--spin", spin(dp.Fan1_Output));
     root.getElementById("fan-exhaust").style.setProperty("--spin", spin(dp.Fan2_Output));
     root.getElementById("core").textContent = virtual.recovery_efficiency === undefined ? "—" : `${this._number(virtual.recovery_efficiency)} %`;
@@ -678,12 +818,14 @@ class AlpicAirNestPanel extends HTMLElement {
       button.setAttribute("aria-pressed", String(!auto && Number(button.dataset.mode) === dp.CurrentOperatingMode));
     });
     const how = { 0: t.onSchedule, 1: t.manual, 2: t.temporary }[sp.ControlMode];
-    root.getElementById("now").textContent = `${t.now}: ${t.modes[dp.CurrentOperatingMode] ?? "—"}${how ? ` · ${how}` : ""}`;
+    const state = `${or(t.modes[dp.CurrentOperatingMode], "—")}${how ? ` · ${how}` : ""}`;
+    root.getElementById("now").textContent = `${t.now}: ${state}`;
+    if (this._compact) root.getElementById("title").textContent = state;
 
     const name = this._targetName();
     const extract = name.includes("Extract");
     if (this._targetDraft === undefined) root.getElementById("target-value").textContent = `${this._number(sp[name], 1)} °C`;
-    const suffix = { 1: 1, 2: 2 }[dp.CurrentOperatingMode] ?? 3;
+    const suffix = or({ 1: 1, 2: 2 }[dp.CurrentOperatingMode], 3);
     root.getElementById("target-label").textContent = `${extract ? t.targetExtract : t.targetSupply} · ${t.modes[suffix]}`;
 
     const chips = [];
@@ -702,10 +844,13 @@ class AlpicAirNestPanel extends HTMLElement {
   _tiles() {
     const t = this._t;
     const { _dp: dp, _sp: sp } = this;
-    const fan = (output, rpm) => `${this._reading(output, 0)} · ${this._reading(rpm)}`;
+    const fan = (title, flow, output, rpm) =>
+      dp[flow]
+        ? this._tile(title, this._reading(flow), `${this._reading(output, 0)} · ${this._reading(rpm)}`)
+        : this._tile(title, this._reading(output, 0), this._reading(rpm));
     const tiles = [
-      this._tile(t.supplyFan, this._reading("Airflow_Supply"), fan("Fan1_Output", "Fan1_RPM")),
-      this._tile(t.exhaustFan, this._reading("Airflow_Exhaust"), fan("Fan2_Output", "Fan2_RPM")),
+      fan(t.supplyFan, "Airflow_Supply", "Fan1_Output", "Fan1_RPM"),
+      fan(t.exhaustFan, "Airflow_Exhaust", "Fan2_Output", "Fan2_RPM"),
       this._tile(t.phase, this._reading("AirTemp_PhaseControl_WhatPhase"), `${t.presentTarget}: ${this._reading("AirTemp_SupplyControl_PresentSetpoint")}`),
     ];
     if (sp.AirTemp_ERC_TypeInstalled === 1) tiles.push(this._tile(t.bypass, this._reading("AirTemp_ERC_Passive_BypassPosition", 0)));
@@ -740,12 +885,14 @@ class AlpicAirNestPanel extends HTMLElement {
       case "switch":
         return `<label class="toggle"><input type="checkbox" data-name="${name}" ${off} aria-label="${esc(item.label)}"><i></i></label>`;
       case "select":
-        return `<select data-name="${name}" ${off} aria-label="${esc(item.label)}">${Object.entries(item.options ?? {})
+        return `<select data-name="${name}" ${off} aria-label="${esc(item.label)}">${Object.entries(item.options || {})
           .map(([value, label]) => `<option value="${esc(value)}">${esc(label)}</option>`)
           .join("")}</select>`;
       default: {
         const step = item.decimals ? 10 ** -item.decimals : 1;
-        return `<input type="number" inputmode="decimal" data-name="${name}" min="${item.min}" max="${item.max}" step="${step}" ${off} aria-label="${esc(item.label)}">
+        const stepper = (direction, sign) =>
+          `<button class="btn stepper" data-action="step" data-for="${name}" data-direction="${direction}" ${off} aria-label="${sign}">${sign}</button>`;
+        return `${stepper(-1, "−")}<input type="number" inputmode="decimal" data-name="${name}" min="${item.min}" max="${item.max}" step="${step}" ${off} aria-label="${esc(item.label)}">${stepper(1, "+")}
           <span class="unit">${esc(this._unit(item.unit))}</span>`;
       }
     }
@@ -758,11 +905,11 @@ class AlpicAirNestPanel extends HTMLElement {
     if (service) {
       meta.push(`#${item.address}`);
       if (item.kind === "number" || item.kind === "select") {
-        const fallback = item.options?.[item.default] ?? this._number(item.default, item.decimals);
+        const fallback = or((item.options || {})[item.default], this._number(item.default, item.decimals));
         meta.push(`${t.factory}: ${fallback}`);
       }
     } else if (!editable) meta.push(t.adminOnly);
-    return `<div class="row" data-row="${esc(item.name)}" title="${esc(item.hint ?? "")}">
+    return `<div class="row" data-row="${esc(item.name)}" title="${esc(item.hint)}">
       <div class="row-text"><div>${esc(item.label)}</div>${meta.length ? `<div class="row-meta">${esc(meta.join(" · "))}</div>` : ""}</div>
       <div class="row-control">${this._control(item, editable)}<span class="row-state"></span></div>
     </div>`;
@@ -770,7 +917,10 @@ class AlpicAirNestPanel extends HTMLElement {
 
   _sectionsOf(items, order) {
     const grouped = {};
-    items.forEach((item) => (grouped[item.section] ??= []).push(item));
+    items.forEach((item) => {
+      grouped[item.section] = grouped[item.section] || [];
+      grouped[item.section].push(item);
+    });
     const known = order.filter((section) => grouped[section]);
     return { grouped, sections: [...known, ...Object.keys(grouped).filter((section) => !known.includes(section))] };
   }
@@ -786,7 +936,7 @@ class AlpicAirNestPanel extends HTMLElement {
         <div class="sections">${all
           .map(
             (section) => `<button data-action="section" data-section="${section}" aria-current="${section === this._section[key]}">
-              ${esc(titles[section] ?? section)}${grouped[section] ? `<span>${grouped[section].length}</span>` : ""}</button>`
+              ${esc(or(titles[section], section))}${grouped[section] ? `<span>${grouped[section].length}</span>` : ""}</button>`
           )
           .join("")}</div>
         <div class="card rows" id="rows">${this._rows()}</div>
@@ -801,7 +951,7 @@ class AlpicAirNestPanel extends HTMLElement {
       return found.length ? found.map(drawRow).join("") : `<div class="empty">${esc(this._t.nothingFound)}</div>`;
     }
     const section = this._section[key];
-    return `${extras[section]?.() ?? ""}${(grouped[section] ?? []).map(drawRow).join("")}`;
+    return `${extras[section] ? extras[section]() : ""}${(grouped[section] || []).map(drawRow).join("")}`;
   }
 
   _settingsPage() {
@@ -822,7 +972,7 @@ class AlpicAirNestPanel extends HTMLElement {
 
   _dataPage() {
     const order = ["temperature", "air", "fans", "operation", "coils", "dampers", "inputs", "temporary", "schedule", "system", "device"];
-    return this._browser("data", this._schema.datapoints, order, (item) => `<div class="row" title="${esc(item.hint ?? "")}">
+    return this._browser("data", this._schema.datapoints, order, (item) => `<div class="row" title="${esc(item.hint)}">
       <div class="row-text">${esc(item.label)}</div><div class="value" data-dp="${esc(item.name)}"></div></div>`);
   }
 
@@ -975,13 +1125,13 @@ class AlpicAirNestPanel extends HTMLElement {
 
   _connectionCard(bare) {
     const t = this._t;
-    const unit = this._units?.find((candidate) => candidate.entry_id === this._entry) ?? {};
+    const unit = (this._units || []).find((candidate) => candidate.entry_id === this._entry) || {};
     const facts = [
       [t.host, unit.host], [t.port, unit.port], [t.unitId, unit.unit], [t.framing, unit.framing === "rtu" ? "RTU over TCP" : "Modbus TCP"],
       [t.ip, this._status.virtual.ip], [t.mac, this._status.virtual.mac], [t.firmware, unit.firmware], [t.bootloader, unit.bootloader],
       [t.eeprom, this._dp.WriteToEepromCounter],
     ];
-    const body = `<div class="facts">${facts.map(([name, value]) => `<div><span>${esc(name)}</span>${esc(value ?? "—")}</div>`).join("")}</div>`;
+    const body = `<div class="facts">${facts.map(([name, value]) => `<div><span>${esc(name)}</span>${esc(or(value, "—"))}</div>`).join("")}</div>`;
     return bare ? `<div style="padding:12px 0">${body}</div>` : `<div class="card"><h2>${esc(t.connection)}</h2>${body}</div>`;
   }
 
@@ -1017,7 +1167,7 @@ class AlpicAirNestPanel extends HTMLElement {
     const name = fault.name;
     if (name && this._schema.faults[name]) return this._schema.faults[name];
     if (fault.word !== undefined) return this._t.unnamedBit(fault.word, fault.bit);
-    const raw = (fault.id ?? "").split(":").pop() ?? "";
+    const raw = (fault.id || "").split(":").pop();
     return raw.includes(".") ? this._t.unnamedBit(...raw.split(".")) : raw;
   }
 
@@ -1038,7 +1188,7 @@ class AlpicAirNestPanel extends HTMLElement {
       const { log } = await this._call("log");
       const box = this.shadowRoot.getElementById("log");
       if (!box) return;
-      const when = new Intl.DateTimeFormat(this._lang, { dateStyle: "short", timeStyle: "short" });
+      const when = new Intl.DateTimeFormat(this._lang, { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
       box.innerHTML = log.length
         ? log.map((item) => `<div class="fault">
             <span class="kind ${item.on ? esc(item.kind) : "gone"}">${esc(item.on ? t.appeared : t.cleared)}</span>
@@ -1087,6 +1237,9 @@ class AlpicAirNestPanel extends HTMLElement {
         break;
       case "target":
         this._nudgeTarget(Number(node.dataset.step));
+        break;
+      case "step":
+        this._stepSetting(node.dataset.for, Number(node.dataset.direction));
         break;
       case "press":
         this._press(node.dataset.press, node.dataset.ask);
@@ -1146,10 +1299,10 @@ class AlpicAirNestPanel extends HTMLElement {
   _nudgeTarget(direction) {
     const name = this._targetName();
     const item = this._setpoints[name];
-    const start = this._targetDraft?.name === name ? this._targetDraft.value : this._sp[name];
+    const start = this._targetDraft && this._targetDraft.name === name ? this._targetDraft.value : this._sp[name];
     if (start === undefined || start === null) return;
-    const low = Math.max(item.min, this._sp.AirTemp_MinAllowedSetpoint ?? item.min);
-    const high = Math.min(item.max, this._sp.AirTemp_MaxAllowedSetpoint ?? item.max);
+    const low = Math.max(item.min, or(this._sp.AirTemp_MinAllowedSetpoint, item.min));
+    const high = Math.min(item.max, or(this._sp.AirTemp_MaxAllowedSetpoint, item.max));
     const value = Math.min(high, Math.max(low, start + direction * TARGET_STEP));
     this._targetDraft = { name, value };
     this.shadowRoot.getElementById("target-value").textContent = `${this._number(value, 1)} °C`;
@@ -1168,18 +1321,33 @@ class AlpicAirNestPanel extends HTMLElement {
     }, SAVE_PAUSE);
   }
 
-  async _press(name, ask) {
+  _stepSetting(name, direction) {
     const item = this._setpoints[name];
-    const question = ask ? this._t[ask] : item?.danger ? `${item.label}. ${this._t.dangerPress}` : null;
+    const input = this.shadowRoot.querySelector(`input[data-name="${name}"]`);
+    const step = item.unit === "°C" ? TARGET_STEP : item.decimals ? 10 ** -item.decimals : 1;
+    const value = Math.min(item.max, Math.max(item.min, (Number(input.value) || 0) + direction * step));
+    input.value = value.toFixed(item.decimals);
+    this._pending[name] = true;
+    clearTimeout(this._stepTimers[name]);
+    // as with the target: one write when the tapping stops
+    this._stepTimers[name] = setTimeout(() => {
+      delete this._pending[name];
+      this._commit(input);
+    }, SAVE_PAUSE);
+  }
+
+  async _press(name, ask) {
+    const item = this._setpoints[name] || {};
+    const question = ask ? this._t[ask] : item.danger ? `${item.label}. ${this._t.dangerPress}` : null;
     if (question && !(await this._ask(question))) return;
     const fields = { name };
-    if (item?.level === "service") fields.token = this._token;
-    if (item?.danger) fields.confirm = true;
+    if (item.level === "service") fields.token = this._token;
+    if (item.danger) fields.confirm = true;
     await this._run(this._call("write", fields).catch((err) => this._denied(err)), true);
   }
 
   _denied(err) {
-    if (err?.code === "service_locked") this._lock();
+    if (err && err.code === "service_locked") this._lock();
     throw err;
   }
 
@@ -1200,7 +1368,8 @@ class AlpicAirNestPanel extends HTMLElement {
   }
 
   _toast(text) {
-    this.shadowRoot.querySelector(".toast")?.remove();
+    const shown = this.shadowRoot.querySelector(".toast");
+    if (shown) shown.remove();
     const toast = document.createElement("div");
     toast.className = "toast";
     toast.setAttribute("role", "status");
@@ -1228,7 +1397,8 @@ class AlpicAirNestPanel extends HTMLElement {
     const name = node.dataset.name;
     const item = this._setpoints[name];
     const value = node.type === "checkbox" ? (node.checked ? 1 : 0) : Number(node.value);
-    const state = node.closest(".row")?.querySelector(".row-state");
+    const row = node.closest(".row");
+    const state = row && row.querySelector(".row-state");
     const previous = this._sp[name];
     const mark = (text, kind) => {
       if (!state) return;
@@ -1254,12 +1424,12 @@ class AlpicAirNestPanel extends HTMLElement {
       node.blur();
       this._fillControl(node);
       this._toast(this._problem(err));
-      if (err?.code === "service_locked") this._lock();
+      if (err && err.code === "service_locked") this._lock();
     }
   }
 
   async _switchUnit(entry) {
-    this._unsubscribe?.then((off) => off()).catch(() => {});
+    this._leave();
     this._entry = entry;
     this._ready = false;
     this._token = null;
