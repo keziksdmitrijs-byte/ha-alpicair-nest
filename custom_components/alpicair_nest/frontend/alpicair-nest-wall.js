@@ -29,6 +29,8 @@ const ACCENTS = {
   orange: "#f97316", red: "#ef4444", pink: "#ec4899", purple: "#8b5cf6",
 };
 const THEMES = ["auto", "light", "dark"];
+// the home screen: the house with its air flows, or the big fan ring
+const LAYOUTS = ["house", "fan"];
 const LANGUAGES = { lv: "Latviešu", ru: "Русский", en: "English" };
 const THEME_ENTITY = "input_select.nspanel_theme";
 const ACCENT_ENTITY = "input_select.nspanel_accent";
@@ -110,6 +112,8 @@ const STRINGS = {
     host: "Адрес", port: "Порт", unitId: "Адрес Modbus", protocol: "Протокол", mac: "MAC", ip: "IP установки",
     firmware: "Прошивка", bootloader: "Загрузчик", eeprom: "Записей в EEPROM", runningHours: "Моточасы", exit: "Выйти из панели",
     menuButton: "Кнопка в меню", leadsTo: "Куда она ведёт",
+    homeLayout: "Главный экран", layouts: { house: "Дом", fan: "Вентилятор" }, fanSpeed: "Скорость вентиляторов",
+    closesOnPick: "закроется после выбора", tapOutside: "коснитесь снаружи, чтобы закрыть",
     errors: {
       forbidden: "Для этого нужны права администратора", service_locked: "Сервис закрыт, введите PIN ещё раз",
       wrong_pin: "Неверный PIN", too_many_tries: (s) => `Слишком много попыток, подождите ${s} с`,
@@ -149,6 +153,8 @@ const STRINGS = {
     host: "Adrese", port: "Ports", unitId: "Modbus adrese", protocol: "Protokols", mac: "MAC", ip: "Iekārtas IP",
     firmware: "Programmatūra", bootloader: "Ielādētājs", eeprom: "EEPROM ieraksti", runningHours: "Darba stundas", exit: "Iziet no paneļa",
     menuButton: "Poga izvēlnē", leadsTo: "Kur tā ved",
+    homeLayout: "Sākuma ekrāns", layouts: { house: "Māja", fan: "Ventilators" }, fanSpeed: "Ventilatoru ātrums",
+    closesOnPick: "aizveras pēc izvēles", tapOutside: "pieskarieties ārpusē",
     errors: {
       forbidden: "Vajadzīgas administratora tiesības", service_locked: "Serviss aizvērts, ievadiet PIN vēlreiz",
       wrong_pin: "Nepareizs PIN", too_many_tries: (s) => `Pārāk daudz mēģinājumu, pagaidiet ${s} s`,
@@ -188,6 +194,8 @@ const STRINGS = {
     host: "Address", port: "Port", unitId: "Modbus unit ID", protocol: "Protocol", mac: "MAC", ip: "Unit IP",
     firmware: "Firmware", bootloader: "Bootloader", eeprom: "EEPROM writes", runningHours: "Running hours", exit: "Leave the panel",
     menuButton: "Menu button", leadsTo: "Where it leads",
+    homeLayout: "Home screen", layouts: { house: "House", fan: "Fan" }, fanSpeed: "Fan speed",
+    closesOnPick: "closes when you pick", tapOutside: "tap outside to close",
     errors: {
       forbidden: "This takes an administrator", service_locked: "Service has closed, enter the PIN again",
       wrong_pin: "Wrong PIN", too_many_tries: (s) => `Too many tries, wait ${s} s`,
@@ -493,10 +501,12 @@ const STYLE = `
 .t-light {
   --bg: #eceff4; --sf: #fff; --sf2: #f5f7fa; --sf3: #e9edf2; --tx: #0f1724; --tx2: #5a6475; --tx3: #8a93a3;
   --track: rgba(15, 23, 36, .09); --sh: 0 1px 3px rgba(16, 24, 40, .08); --ov: rgba(15, 23, 36, .45);
+  --roof: #3f4b5e; --attic: #f5f7fa; --wall: #fff; --line: rgba(15, 23, 36, .12); --ground: #c9d0da;
 }
 .t-dark {
   --bg: #0d1015; --sf: #171b22; --sf2: #1e232c; --sf3: #272d38; --tx: #f2f4f8; --tx2: #9aa3b2; --tx3: #687284;
   --track: rgba(255, 255, 255, .09); --sh: none; --ov: rgba(0, 0, 0, .6);
+  --roof: #475569; --attic: #1b2029; --wall: #1e232c; --line: rgba(255, 255, 255, .1); --ground: #2a313c;
 }
 button { font: inherit; color: inherit; background: none; border: 0; padding: 0; margin: 0; text-align: inherit; cursor: pointer; outline: none; -webkit-tap-highlight-color: transparent; transition: transform .1s; }
 button:active { transform: scale(.97); }
@@ -576,6 +586,50 @@ button[disabled] { opacity: .45; }
 .dock .accent span { color: rgba(255, 255, 255, .85); }
 .spin { animation: spin var(--speed, 2s) linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* home: the house */
+.house-wrap { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
+.house { position: relative; width: 460px; height: 352px; flex: none; }
+.house > svg { position: absolute; top: 0; left: 0; width: 460px; height: 352px; }
+.house .clock { position: absolute; left: 150px; top: 4px; width: 160px; text-align: center; font-size: 24px; font-weight: 700; }
+.house .badge { position: absolute; right: 0; top: 0; height: 40px; margin: 0; padding: 0 12px; border-radius: 20px; font-size: 17px; font-weight: 700; }
+.house .tap { position: absolute; left: 104px; top: 0; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 14px; background: var(--sf); box-shadow: var(--sh); }
+.hl { position: absolute; width: 80px; text-align: center; font-size: 32px; font-weight: 500; line-height: 1.1; white-space: nowrap; }
+.house-mid { position: absolute; left: 150px; top: 180px; width: 160px; display: flex; flex-direction: column; align-items: center; }
+.house-speed { display: flex; align-items: baseline; justify-content: center; min-width: 120px; height: 55px; border-radius: 16px; }
+.house-speed b { font-size: 56px; font-weight: 300; letter-spacing: -1px; line-height: 1; }
+.house-speed small { margin-left: 2px; font-size: 20px; color: var(--tx2); }
+.house-mode { display: flex; align-items: center; justify-content: center; min-width: 116px; max-width: 160px; height: 63px; margin-top: 4px; padding: 0 14px; border-radius: 18px; background: rgba(var(--acc-rgb), .12); font-size: 15px; font-weight: 600; }
+.house-mode .ic { width: 16px; height: 16px; margin-right: 6px; }
+.house-mode span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dock.tall { height: 98px; margin-top: 10px; }
+.dock.tall b { font-size: 18px; }
+
+/* half-transparent sheets over the home screen */
+.sheet-shade { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 4; display: flex; align-items: flex-end; background: var(--ov); }
+.sheet { width: 100%; padding: 16px 16px 18px; border-radius: 26px 26px 0 0; background: var(--sf); animation: sheet-up .18s ease-out; }
+@keyframes sheet-up { from { transform: translateY(40px); } to { transform: none; } }
+.sheet-head { display: flex; align-items: center; justify-content: space-between; margin: 0 4px 12px; }
+.sheet-head b { font-size: 18px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sheet-head span { flex: none; margin-left: 10px; color: var(--tx2); font-size: 13px; }
+.picks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-gap: 8px; }
+.pick { display: flex; flex-direction: column; justify-content: center; height: 56px; padding: 0 14px; border-radius: 16px; background: var(--sf3); }
+.pick b { font-size: 15px; font-weight: 600; }
+.pick span { font-size: 12px; opacity: .75; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pick.span { grid-column: 1 / -1; }
+.pick.on { background: var(--acc); color: #fff; }
+.sheet-row { display: flex; align-items: center; }
+.sheet-step { flex: 1 1 0; height: 120px; display: flex; align-items: center; justify-content: center; border-radius: 20px; background: rgba(var(--acc-rgb), .13); color: var(--acc); }
+.sheet-step .ic { width: 36px; height: 36px; stroke-width: 2.4; }
+.sheet-step.low { height: 96px; }
+.sheet-mid { flex: none; width: 170px; margin: 0 12px; text-align: center; }
+.ring.small { width: 170px; height: 170px; }
+.ring.small .ring-text b { font-size: 44px; }
+.ring.small .ring-text b small { font-size: 18px; }
+.sheet-mid > b { font-size: 60px; font-weight: 300; letter-spacing: -1px; }
+.sheet-mid > b small { font-size: 22px; font-weight: 400; color: var(--tx2); }
+.bar-line { height: 8px; margin-top: 6px; border-radius: 4px; background: var(--sf3); overflow: hidden; }
+.bar-line i { display: block; height: 100%; width: 0; background: var(--acc); transition: width .2s; }
 
 /* main menu */
 .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(3, minmax(0, 1fr)); grid-gap: 8px; height: 100%; }
@@ -1122,6 +1176,10 @@ class AlpicAirNestWall extends HTMLElement {
       } else set(node, this._reading(name));
     });
     root.querySelectorAll("[data-deg]").forEach((node) => set(node, this._degrees(this._dp[node.dataset.deg])));
+    root.querySelectorAll("[data-deg0]").forEach((node) => {
+      const value = this._dp[node.dataset.deg0];
+      set(node, value === null || value === undefined ? "—" : `${this._number(value, 0).replace("-", "−")}°`);
+    });
     root.querySelectorAll("[data-set]").forEach((node) => {
       const item = this._setpoints[node.dataset.set];
       if (item) set(node, this._setting(item));
@@ -1180,7 +1238,147 @@ class AlpicAirNestWall extends HTMLElement {
 
   // home
 
-  _view_home() {
+  get _layout() {
+    const chosen = (this._embed && this._embed.layout) || QUERY.get("layout") || stored.get("layout");
+    return LAYOUTS.indexOf(chosen) >= 0 ? chosen : "house";
+  }
+
+  _view_home(top) {
+    return this._layout === "fan" ? this._view_fanhome() : this._view_house(top);
+  }
+
+  _view_house(top) {
+    const t = this._t;
+    const sheet = { mode: () => this._sheetMode(), temp: () => this._sheetTemp(), fan: () => this._sheetFan() }[top.sheet];
+    const label = (left, topPx, name) => `<div class="hl" style="left:${left}px;top:${topPx}px" data-deg0="${name}"></div>`;
+    return `<div class="home">
+      <div class="house-wrap"><div class="house">
+        <svg viewBox="0 0 460 352" aria-hidden="true">
+          <rect x="292" y="74" width="28" height="70" rx="3" fill="var(--roof)"/>
+          <rect x="288" y="70" width="36" height="10" rx="3" fill="var(--roof)"/>
+          <polygon points="96,172 230,74 364,172" fill="var(--attic)"/>
+          <rect x="96" y="166" width="268" height="173" rx="3" fill="var(--wall)" stroke="var(--line)" stroke-width="2"/>
+          <path d="M96 172 H364" stroke="var(--line)" stroke-width="2"/>
+          <polygon points="192,114 268,114 284,137 268,160 192,160 176,137" fill="var(--wall)"/>
+          <path d="M282.7 114.7 L276 121 L184 121 L160 141 M296.7 128.1 L284 139 L190 139 L166 161" stroke="#38bdf8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          <path d="M172 118.6 L182 130 L278 130 L300 152 M160 129.4 L176 148 L284 148 L297.3 160.7" stroke="#f97316" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          <polygon points="192,114 268,114 284,137 268,160 192,160 176,137" fill="none" stroke="var(--tx)" stroke-width="3" stroke-linejoin="round"/>
+          <path d="M70 180 L230 60 L390 180" stroke="var(--roof)" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          <path d="M128 118 L78 80 M96.8 81.7 L78 80 L84.7 97.7" stroke="#f97316" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          <path d="M412 72 L322 114 M340.7 116.3 L322 114 L332.3 98.1" stroke="#38bdf8" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          <path d="M128 182 V236 M117 224 L128 237 L139 224" stroke="#38bdf8" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          <path d="M332 237 V183 M321 196 L332 183 L343 196" stroke="#f97316" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          <path d="M24 339 H436" stroke="var(--ground)" stroke-width="4" stroke-linecap="round"/>
+        </svg>
+        <div class="clock" id="h-time"></div>
+        ${this._embed ? `<button class="tap" data-do="exit" aria-label="${esc(t.exit)}">${icon("back")}</button>` : ""}
+        <button class="badge" id="h-faults" data-node="faults" hidden></button>
+        ${label(6, 26, "T_Exhaust")}${label(330, 20, "T_Outdoor")}${label(88, 246, "T_Supply")}${label(292, 246, "T_Extract")}
+        <div class="house-mid">
+          <button class="house-speed" data-do="sheet" data-sheet="fan" aria-label="${esc(t.fanSpeed)}"><b id="h-speed"></b><small id="h-speed-unit"></small></button>
+          <button class="house-mode" data-do="sheet" data-sheet="mode">${icon("power")}<span id="h-mode"></span></button>
+        </div>
+      </div></div>
+      <div class="dock tall">
+        <button data-do="sheet" data-sheet="temp">${icon("thermo")}<b id="h-dock-temp"></b><span>${esc(t.temperature)}</span></button>
+        <button data-do="air">${icon("drop")}<b id="h-dock-air"></b><span id="h-dock-air-label"></span></button>
+        <button class="accent" data-do="menu">${icon("grid")}<b>${esc(t.menu)}</b></button>
+      </div>
+      ${sheet ? `<div class="sheet-shade" data-do="sheet-close"><div class="sheet" data-do="noop">${sheet()}</div></div>` : ""}
+    </div>`;
+  }
+
+  _sheetMode() {
+    const t = this._t;
+    const auto = this._sp.ControlMode === 0;
+    const current = this._dp.CurrentOperatingMode;
+    const pick = (mode, label, cls = "") => `<button class="pick ${cls} ${!auto && mode === current ? "on" : ""}" data-mode="${mode}">
+      <b>${esc(label)}</b><span>${esc(mode ? this._modeFacts(mode) : "")}</span></button>`;
+    return `<div class="sheet-head"><b>${esc(t.mode)}</b><span>${esc(t.closesOnPick)}</span></div>
+      <div class="picks">
+        <button class="pick span ${auto ? "on" : ""}" data-do="auto"><b>${esc(t.scheduleMode)}</b><span>${esc(auto ? this._modeState().mode : "")}</span></button>
+        ${[1, 2, 3, 4, 5].map((mode) => pick(mode, t.modes[mode])).join("")}${pick(0, t.turnOff)}
+      </div>`;
+  }
+
+  _sheetTemp() {
+    const t = this._t;
+    return `<div class="sheet-head"><b>${esc(t.temperature)} · ${esc(this._modeState().mode)}</b><span>${esc(t.tapOutside)}</span></div>
+      <div class="sheet-row">
+        <button class="sheet-step" data-do="target" data-step="-1" aria-label="−">${icon("minus")}</button>
+        <div class="sheet-mid">${this._ring("small", `<b id="r-value"></b><span id="r-note"></span>`)}</div>
+        <button class="sheet-step" data-do="target" data-step="1" aria-label="+">${icon("plus")}</button>
+      </div>`;
+  }
+
+  _sheetFan() {
+    const t = this._t;
+    return `<div class="sheet-head"><b>${esc(t.fanSpeed)} · ${esc(this._modeState().mode)}</b><span>${esc(t.tapOutside)}</span></div>
+      <div class="sheet-row">
+        <button class="sheet-step low" data-fan="-1" aria-label="−">${icon("minus")}</button>
+        <div class="sheet-mid"><b id="s-speed"></b><div class="bar-line"><i id="s-bar"></i></div></div>
+        <button class="sheet-step low" data-fan="1" aria-label="+">${icon("plus")}</button>
+      </div>`;
+  }
+
+  _openSheet(kind) {
+    this._top.sheet = kind;
+    this._draw();
+  }
+
+  _closeSheet() {
+    if (!this._top.sheet) return;
+    this._top.sheet = null;
+    this._draw();
+  }
+
+  // what the fans are asked to do in this mode, while tapping too
+  _fanAsked() {
+    const items = this._fanItems();
+    const now = this._fanNow();
+    const item = items ? items[0] : { min: 0, max: 100 };
+    const pending = items && this._pendingFan && this._pendingFan.items[0].name === item.name ? this._pendingFan : null;
+    const asked = items ? (pending ? pending.values[0] : this._sp[item.name]) : now.value;
+    return { items, now, item, asked };
+  }
+
+  _refreshHouse() {
+    const root = this.shadowRoot;
+    const { items, now, item, asked } = this._fanAsked();
+    this._put("h-mode", this._modeState().mode);
+    this._put("h-time", this._clock());
+    this._put("h-speed", this._number(asked));
+    this._put("h-speed-unit", now.unit);
+    this._put("h-dock-temp", this._degrees(this._targetValue()));
+    const air = this._airValue();
+    this._put("h-dock-air", air[1]);
+    this._put("h-dock-air-label", air[0]);
+    this._refreshBadge();
+    const sheet = this._top.sheet;
+    if (sheet === "temp") this._refreshTemp();
+    if (sheet === "fan") {
+      const speed = root.getElementById("s-speed");
+      speed.innerHTML = `${esc(this._number(asked))}<small>${esc(now.unit)}</small>`;
+      const share = item.max > item.min ? (or(asked, item.min) - item.min) / (item.max - item.min) : 0;
+      root.getElementById("s-bar").style.width = `${Math.round(Math.min(1, Math.max(0, share)) * 100)}%`;
+      root.querySelectorAll("[data-fan]").forEach((button) => {
+        button.disabled = !items;
+      });
+    }
+  }
+
+  _refreshBadge() {
+    const badge = this.shadowRoot.getElementById("h-faults");
+    const faults = this._status.faults;
+    badge.hidden = !faults.length;
+    badge.style.display = faults.length ? "" : "none";
+    if (faults.length) {
+      badge.className = `badge ${faults.some((fault) => fault.kind === "error") ? "" : "warn"}`;
+      badge.innerHTML = `${icon("alert")}${faults.length}`;
+    }
+  }
+
+  _view_fanhome() {
     const t = this._t;
     const side = (id, label, step, glyph) => `<div class="fan-side">
         <div class="fan-who"><span>${esc(label)}</span><b id="h-${id}"></b><small id="h-${id}-rpm"></small></div>
@@ -1267,11 +1465,7 @@ class AlpicAirNestWall extends HTMLElement {
   }
 
   _refreshFan() {
-    const items = this._fanItems();
-    const now = this._fanNow();
-    const item = items ? items[0] : { min: 0, max: 100 };
-    const pending = items && this._pendingFan && this._pendingFan.items[0].name === item.name ? this._pendingFan : null;
-    const asked = items ? (pending ? pending.values[0] : this._sp[item.name]) : now.value;
+    const { items, now, item, asked } = this._fanAsked();
     const range = item.max - item.min;
     this._showRing((asked - item.min) / range, (or(now.value, item.min) - item.min) / range);
     const value = this.shadowRoot.getElementById("r-value");
@@ -1308,7 +1502,7 @@ class AlpicAirNestWall extends HTMLElement {
     });
     if (!change && !same) return;
     this._pendingFan = { items, values: values.map((value) => value + change) };
-    this._refreshFan();
+    this._refreshHome();
     clearTimeout(this._fanTimer);
     // like the temperature, these live in EEPROM: one write when the tapping stops
     this._fanTimer = setTimeout(() => this._saveFan(), SAVE_PAUSE);
@@ -1377,8 +1571,11 @@ class AlpicAirNestWall extends HTMLElement {
   }
 
   _refreshHome() {
+    if (this._layout !== "fan") {
+      this._refreshHouse();
+      return;
+    }
     const t = this._t;
-    const root = this.shadowRoot;
     const { mode, how } = this._modeState();
     const phase = t.phases[this._dp.AirTemp_PhaseControl_WhatPhase];
     const running = this._dp.CurrentOperatingMode !== 0;
@@ -1391,14 +1588,7 @@ class AlpicAirNestWall extends HTMLElement {
     const air = this._airValue();
     this._put("h-dock-air", air[1]);
     this._put("h-dock-air-label", air[0]);
-    const badge = root.getElementById("h-faults");
-    const faults = this._status.faults;
-    badge.hidden = !faults.length;
-    badge.style.display = faults.length ? "" : "none";
-    if (faults.length) {
-      badge.className = `badge ${faults.some((fault) => fault.kind === "error") ? "" : "warn"}`;
-      badge.innerHTML = `${icon("alert")}${faults.length}`;
-    }
+    this._refreshBadge();
   }
 
   _clock() {
@@ -1412,7 +1602,8 @@ class AlpicAirNestWall extends HTMLElement {
     if (start === null) return;
     const { low, high } = this._targetLimits();
     this._pendingTarget = { name, value: Math.min(high, Math.max(low, start + direction * TARGET_STEP)) };
-    this._refreshTemp();
+    if (this._top.view === "home") this._refreshHome();
+    else this._refreshTemp();
     clearTimeout(this._targetTimer);
     // the value lives in EEPROM: one write when the tapping stops, not one per tap
     this._targetTimer = setTimeout(async () => {
@@ -1470,7 +1661,6 @@ class AlpicAirNestWall extends HTMLElement {
     const t = this._t;
     const node = this._nodes[top.id];
     const rows = node.kids
-      .filter((kid) => !(this._embed && kid.id === "screen"))
       .map((kid) => {
         const entry = this._nodes[kid.id];
         return `<button class="row" data-node="${kid.id}"><div class="box">${icon(kid.icon)}</div>
@@ -1984,8 +2174,13 @@ class AlpicAirNestWall extends HTMLElement {
     const theme = this._state(THEME_ENTITY) || stored.get("theme") || "auto";
     const language = this._lang;
     const accent = this._state(ACCENT_ENTITY) || stored.get("accent") || "blue";
+    const layout = `<div class="caption">${esc(t.homeLayout)}</div>
+        <div class="seg">${LAYOUTS.map((name) => `<button data-look="layout:${name}" class="${name === this._layout ? "on" : ""}">${esc(t.layouts[name])}</button>`).join("")}</div>`;
+    // hosted in a card, the card keeps the look; the home screen is still chosen here
+    if (this._embed) return `${this._bar(this._title("screen"), this._title("system"))}<div class="body">${layout}</div>`;
     return `${this._bar(this._title("screen"), this._title("system"))}
       <div class="body">
+        ${layout}
         <div class="caption">${esc(t.theme)}</div>
         <div class="seg">${THEMES.map((name) => `<button data-look="theme:${name}" class="${name === theme ? "on" : ""}">${esc(t.themes[name])}</button>`).join("")}</div>
         <div class="caption">${esc(t.accent)}</div>
@@ -2140,6 +2335,7 @@ class AlpicAirNestWall extends HTMLElement {
     const left = this.shadowRoot.getElementById("service-left");
     if (left && this._token) left.textContent = this._t.open(this._left());
     const quiet = Date.now() - this._last > IDLE_MS;
+    if (quiet && this._top.sheet && this._ready) this._closeSheet();
     const busy = ["editor", "event", "day", "copy", "pin"].includes(this._top.view);
     if (quiet && this._stack.length > 1 && !busy && this._ready) {
       this._token = null;
@@ -2157,7 +2353,10 @@ class AlpicAirNestWall extends HTMLElement {
     else if (data.node) this._open(data.node);
     else if (data.edit) this._edit(data.edit);
     else if (data.press) this._press(data.press);
-    else if (data.mode !== undefined) this._control({ action: "set_mode", mode: Number(data.mode) });
+    else if (data.mode !== undefined) {
+      this._control({ action: "set_mode", mode: Number(data.mode) });
+      this._closeSheet();
+    }
     else if (data.pick !== undefined) this._pick(Number(data.pick));
     else if (data.day !== undefined) this._openDay(Number(data.day));
     else if (data.event !== undefined) this._openEvent(Number(data.event));
@@ -2171,7 +2370,7 @@ class AlpicAirNestWall extends HTMLElement {
     else if (data.target) this._setHome(data.target);
   }
 
-  _action(name) {
+  _action(name, node) {
     const top = this._top;
     switch (name) {
       case "back": this._leaveScreen(); break;
@@ -2183,7 +2382,12 @@ class AlpicAirNestWall extends HTMLElement {
       case "flow": this._go("flow"); break;
       case "air": this._open(this._airValue()[0] === this._t.recovery ? "readings" : "air"); break;
       case "target": break;
-      case "auto": this._control({ action: "set_auto" }); break;
+      case "auto":
+        this._control({ action: "set_auto" });
+        this._closeSheet();
+        break;
+      case "sheet": this._openSheet(node.dataset.sheet); break;
+      case "sheet-close": this._closeSheet(); break;
       case "sync": this._control({ action: "sync_clock" }, true); break;
       case "save": this._saveEditor(); break;
       case "keys-on":

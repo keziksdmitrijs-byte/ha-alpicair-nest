@@ -40,13 +40,14 @@
 
 Для квадратного SONOFF NSPanel Pro (480×480) есть отдельная панель: пункт **NEST NSPanel** в боковом меню, адрес `/alpicair-nest-wall`. Она рисуется под палец и не требует экранной клавиатуры: числа меняются кнопками − и +, ползунком или встроенной цифровой клавиатурой.
 
-- **Главный экран:** режим, скорость вентиляторов с кнопками − и + (крупно, в центре, под ней текущий режим; нажатие на круг открывает режимы), четыре температуры, цель по температуре, влажность. Кнопки меняют скорость текущего режима сразу у обоих вентиляторов, разница между ними сохраняется. Менять скорость могут администраторы.
+- **Главный экран «Дом»** (по умолчанию): дом с потоками воздуха — с улицы, в комнаты, из комнат и наружу, с их температурами; на чердаке теплообменник; в центре скорость вентиляторов и режим. Нажатие на режим, температуру или скорость открывает полупрозрачное окно поверх экрана: режим закрывается сразу после выбора, температура и скорость — касанием вне окна. Значок в правом верхнем углу появляется при ошибках и открывает их.
+- **Главный экран «Вентилятор»:** режим, скорость вентиляторов с кнопками − и + (крупно, в центре, под ней текущий режим; нажатие на круг открывает режимы), четыре температуры, цель по температуре, влажность. Кнопки меняют скорость текущего режима сразу у обоих вентиляторов, разница между ними сохраняется. Менять скорость могут администраторы.
 - **Меню:** Режим, Климат, Вентиляция, Качество воздуха, Расписание, Показания, Ошибки, Система, Сервис и кнопка перехода на другую панель.
 - **Подменю:** через них доступна каждая из 368 настроек установки. Сервис открывается PIN-клавиатурой.
 - **Расписание:** неделя, правка событий, копирование дня.
 - Через две минуты без касаний панель возвращается на главный экран и закрывает сервис. Назад можно вернуться кнопкой или свайпом вправо.
 
-Язык, тема и цвет меняются в **Система → Экран панели**. Если в Home Assistant есть `input_select.nspanel_language`, `input_select.nspanel_theme` и `input_select.nspanel_accent`, панель берёт значения из них. Иначе выбор хранится на устройстве.
+Вид главного экрана, язык, тема и цвет меняются в **Система → Экран панели**. Если в Home Assistant есть `input_select.nspanel_language`, `input_select.nspanel_theme` и `input_select.nspanel_accent`, панель берёт значения из них. Иначе выбор хранится на устройстве.
 
 Куда ведёт кнопка в меню, выбирается значком рядом с ней или там же, в **Система → Экран панели**: из списка панелей и видов дашбордов. Выбор хранится на устройстве, а если есть `input_text.nspanel_home`, то в нём, и тогда он общий для всех устройств.
 
@@ -124,7 +125,7 @@ Modbus TCP must be enabled on the unit (port 502 by default).
 
 The SONOFF NSPanel Pro (480×480) has a panel of its own: **NEST NSPanel** in the sidebar, at `/alpicair-nest-wall`. It has a home screen, a menu and submenus that reach all 368 settings, a schedule editor, faults and service access with an on-screen PIN pad, and it needs no on-screen keyboard. It returns to the home screen after two minutes without a touch.
 
-The home screen is built around fan speed: − and + change the current mode's speed on both fans at once and keep the difference between them, which takes an administrator. The current mode is shown under the speed, and tapping the ring opens the modes. The temperature target has its own screen, one tap away.
+The home screen shows the house by default: the four air flows with their temperatures, the heat exchanger in the attic, fan speed and mode in the middle, and a fault badge in the top right corner that opens the faults. Mode, temperature and fan speed open half-transparent sheets over it: the mode sheet closes once a mode is picked, the others with a tap outside. **System → Panel screen** switches to the fan layout instead, where − and + change the current mode's speed on both fans at once and keep the difference between them, which takes an administrator. The current mode is shown under the speed, and tapping the ring opens the modes. The temperature target has its own screen, one tap away.
 
 The [NSPanel Pro Card](https://github.com/keziksdmitrijs-byte/nspanel-pro-card) can show this panel as its recuperator page (`type: nest_new`). It then takes the card's theme, accent and language, and its leave button goes back to the card's start screen.
 
