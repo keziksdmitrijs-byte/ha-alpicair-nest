@@ -503,12 +503,12 @@ const STYLE = `
 .t-light {
   --bg: #eceff4; --sf: #fff; --sf2: #f5f7fa; --sf3: #e9edf2; --tx: #0f1724; --tx2: #5a6475; --tx3: #8a93a3;
   --track: rgba(15, 23, 36, .09); --sh: 0 1px 3px rgba(16, 24, 40, .08); --ov: rgba(15, 23, 36, .45);
-  --roof: #3f4b5e; --attic: #f5f7fa; --wall: #fff; --line: rgba(15, 23, 36, .12); --ground: #c9d0da;
+  --shell: #d5dbe3;
 }
 .t-dark {
   --bg: #0d1015; --sf: #171b22; --sf2: #1e232c; --sf3: #272d38; --tx: #f2f4f8; --tx2: #9aa3b2; --tx3: #687284;
   --track: rgba(255, 255, 255, .09); --sh: none; --ov: rgba(0, 0, 0, .6);
-  --roof: #475569; --attic: #1b2029; --wall: #1e232c; --line: rgba(255, 255, 255, .1); --ground: #2a313c;
+  --shell: #3a4352;
 }
 button { font: inherit; color: inherit; background: none; border: 0; padding: 0; margin: 0; text-align: inherit; cursor: pointer; outline: none; -webkit-tap-highlight-color: transparent; transition: transform .1s; }
 button:active { transform: scale(.97); }
@@ -591,20 +591,19 @@ button[disabled] { opacity: .45; }
 
 /* home: the house */
 .house-wrap { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
-.house { position: relative; width: 460px; height: 352px; flex: none; zoom: .84; }
-.house > svg { position: absolute; top: 0; left: 0; width: 460px; height: 352px; }
-.house .clock { position: absolute; left: 160px; top: 2px; width: 140px; text-align: center; font-size: 28px; font-weight: 700; }
+.house { position: relative; width: 460px; height: 356px; flex: none; zoom: .84; }
+.house > svg { position: absolute; top: 0; left: 0; width: 460px; height: 356px; }
+.house .clock { position: absolute; left: 160px; top: 52px; width: 140px; text-align: center; font-size: 28px; font-weight: 700; }
 .house .badge { position: absolute; right: 0; top: 0; height: 48px; margin: 0; padding: 0 14px; border-radius: 24px; font-size: 20px; font-weight: 700; }
 .house .tap { position: absolute; left: 0; top: 0; width: 52px; height: 52px; display: flex; align-items: center; justify-content: center; border-radius: 14px; background: var(--sf); box-shadow: var(--sh); }
-.hl { position: absolute; width: 84px; text-align: center; font-size: 36px; font-weight: 500; line-height: 1.1; white-space: nowrap; }
-.house-mid { position: absolute; left: 142px; top: 178px; width: 176px; display: flex; flex-direction: column; align-items: center; }
-.house-speed { display: flex; align-items: baseline; justify-content: center; min-width: 120px; height: 66px; border-radius: 16px; }
-.house-speed b { font-size: 64px; font-weight: 300; letter-spacing: -1px; line-height: 1; }
-.house-speed small { margin-left: 2px; font-size: 20px; color: var(--tx2); }
-.house-mode { display: flex; align-items: center; justify-content: center; min-width: 130px; max-width: 168px; height: 66px; margin-top: 2px; padding: 0 14px; border-radius: 20px; background: rgba(var(--acc-rgb), .12); font-size: 20px; font-weight: 600; }
-.house-mode .ic { width: 20px; height: 20px; margin-right: 6px; flex: none; }
+.hl { position: absolute; width: 96px; text-align: center; font-size: 34px; font-weight: 500; line-height: 1.1; white-space: nowrap; }
+.house-speed { position: absolute; left: 184px; top: 136px; width: 92px; height: 92px; display: flex; align-items: baseline; justify-content: center; padding-top: 24px; border-radius: 46px; text-align: center; }
+.house-speed b { font-size: 34px; font-weight: 500; letter-spacing: -1px; line-height: 1; }
+.house-speed small { margin-left: 1px; font-size: 16px; color: var(--tx2); }
+.house-mode { position: absolute; left: 134px; top: 300px; width: 190px; height: 54px; display: flex; align-items: center; justify-content: center; padding: 0 12px; border-radius: 18px; background: rgba(var(--acc-rgb), .12); font-size: 19px; font-weight: 600; }
+.house-mode .ic { width: 18px; height: 18px; margin-right: 6px; flex: none; }
 .house-mode span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dock.tall { height: 96px; margin-top: 8px; }
+.dock.tall { height: 92px; margin-top: 8px; }
 .dock.tall b { font-size: 18px; }
 
 /* half-transparent sheets over the home screen */
@@ -1176,10 +1175,6 @@ class AlpicAirNestWall extends HTMLElement {
       } else set(node, this._reading(name));
     });
     root.querySelectorAll("[data-deg]").forEach((node) => set(node, this._degrees(this._dp[node.dataset.deg])));
-    root.querySelectorAll("[data-deg0]").forEach((node) => {
-      const value = this._dp[node.dataset.deg0];
-      set(node, value === null || value === undefined ? "—" : `${this._number(value, 0).replace("-", "−")}°`);
-    });
     root.querySelectorAll("[data-set]").forEach((node) => {
       const item = this._setpoints[node.dataset.set];
       if (item) set(node, this._setting(item));
@@ -1250,42 +1245,29 @@ class AlpicAirNestWall extends HTMLElement {
   _view_house(top) {
     const t = this._t;
     const sheet = { mode: () => this._sheetMode(), temp: () => this._sheetTemp(), fan: () => this._sheetFan() }[top.sheet];
-    const label = (left, topPx, name) => `<div class="hl" style="left:${left}px;top:${topPx}px" data-deg0="${name}"></div>`;
+    const label = (left, topPx, width, name) => `<div class="hl" style="left:${left}px;top:${topPx}px;width:${width}px" data-deg="${name}"></div>`;
     return `<div class="home">
       <div class="house-wrap"><div class="house">
-        <svg viewBox="0 0 460 352" aria-hidden="true">
-          <rect x="292" y="74" width="28" height="70" rx="3" fill="var(--roof)"/>
-          <rect x="288" y="70" width="36" height="10" rx="3" fill="var(--roof)"/>
-          <polygon points="96,172 230,74 364,172" fill="var(--attic)"/>
-          <rect x="96" y="166" width="268" height="173" rx="3" fill="var(--wall)" stroke="var(--line)" stroke-width="2"/>
-          <path d="M96 172 H364" stroke="var(--line)" stroke-width="2"/>
-          <g fill="none" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M182 126 C160 118 140 112 118 98 L70 70" stroke="#f97316" stroke-width="16" opacity=".28"/>
-            <path d="M424 58 L346 102 C330 112 300 122 282 130" stroke="#38bdf8" stroke-width="16" opacity=".28"/>
-            <path d="M200 160 C190 172 128 166 128 196 V236" stroke="#38bdf8" stroke-width="16" opacity=".28"/>
-            <path d="M332 250 V196 C332 166 270 172 260 160" stroke="#f97316" stroke-width="16" opacity=".28"/>
-            <path d="M182 126 C160 118 140 112 118 98 L74 72" stroke="#f97316" stroke-width="4"/>
-            <path d="M424 58 L346 102 C330 112 300 122 282 130" stroke="#38bdf8" stroke-width="4"/>
-            <path d="M200 160 C190 172 128 166 128 196 V238" stroke="#38bdf8" stroke-width="4"/>
-            <path d="M332 250 V196 C332 166 270 172 260 160" stroke="#f97316" stroke-width="4"/>
-          </g>
-          <polygon points="192,114 268,114 284,137 268,160 192,160 176,137" fill="var(--wall)" stroke="var(--tx)" stroke-width="3" stroke-linejoin="round"/>
-          <path d="M184 124 H276 M184 137 H276 M184 150 H276" stroke="var(--line)" stroke-width="2"/>
-          <path d="M70 180 L230 60 L390 180" stroke="var(--roof)" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-          <polygon points="58,63 80,64 69,82" fill="#f97316"/>
-          <polygon points="352,98 373,98 363,81" fill="#38bdf8"/>
-          <polygon points="128,254 116,236 140,236" fill="#38bdf8"/>
-          <polygon points="332,196 320,214 344,214" fill="#f97316"/>
-          <path d="M24 339 H436" stroke="var(--ground)" stroke-width="4" stroke-linecap="round"/>
+        <svg viewBox="0 0 460 356" aria-hidden="true">
+          <path d="M50 356 V122 L230 24 L410 122 V356" fill="none" stroke="var(--shell)" stroke-width="8" stroke-linejoin="round" stroke-linecap="round"/>
+          <rect x="160" y="122" width="140" height="120" rx="12" fill="var(--bg)" stroke="var(--shell)" stroke-width="4"/>
+          <rect x="178" y="116" width="28" height="12" rx="3" fill="var(--shell)"/>
+          <rect x="254" y="116" width="28" height="12" rx="3" fill="var(--shell)"/>
+          <rect x="178" y="236" width="28" height="12" rx="3" fill="var(--shell)"/>
+          <rect x="254" y="236" width="28" height="12" rx="3" fill="var(--shell)"/>
+          <path d="M118 42 L192 104 L192 134 L268 228 L268 258 L283 274" fill="none" stroke="#38bdf8" stroke-width="10" stroke-linejoin="round" stroke-linecap="round"/>
+          <polygon points="297,291 292,267 274,281" fill="#38bdf8"/>
+          <path d="M268 134 L192 228" fill="none" stroke="var(--bg)" stroke-width="20" stroke-linecap="round"/>
+          <path d="M167 295 L192 258 L192 228 L268 134 L268 104 L328 48" fill="none" stroke="#f97316" stroke-width="10" stroke-linejoin="round" stroke-linecap="round"/>
+          <polygon points="342,35 316,42 332,58" fill="#f97316"/>
+          <circle cx="230" cy="182" r="46" fill="var(--sf)" stroke="var(--shell)" stroke-width="4"/>
         </svg>
         <div class="clock" id="h-time"></div>
         ${this._embed ? `<button class="tap" data-do="exit" aria-label="${esc(t.exit)}">${icon("back")}</button>` : ""}
         <button class="badge" id="h-faults" data-node="faults" hidden></button>
-        ${label(78, 18, "T_Exhaust")}${label(300, 8, "T_Outdoor")}${label(66, 262, "T_Supply")}${label(310, 262, "T_Extract")}
-        <div class="house-mid">
-          <button class="house-speed" data-do="sheet" data-sheet="fan" aria-label="${esc(t.fanSpeed)}"><b id="h-speed"></b><small id="h-speed-unit"></small></button>
-          <button class="house-mode" data-do="sheet" data-sheet="mode">${icon("power")}<span id="h-mode"></span></button>
-        </div>
+        ${label(0, 62, 96, "T_Outdoor")}${label(352, 62, 108, "T_Exhaust")}${label(56, 270, 96, "T_Extract")}${label(315, 276, 96, "T_Supply")}
+        <button class="house-speed" data-do="sheet" data-sheet="fan" aria-label="${esc(t.fanSpeed)}"><b id="h-speed"></b><small id="h-speed-unit"></small></button>
+        <button class="house-mode" data-do="sheet" data-sheet="mode">${icon("power")}<span id="h-mode"></span></button>
       </div></div>
       <div class="dock tall">
         <button data-do="sheet" data-sheet="temp">${icon("thermo")}<b id="h-dock-temp"></b><span>${esc(t.temperature)}</span></button>
