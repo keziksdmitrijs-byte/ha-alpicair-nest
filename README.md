@@ -40,13 +40,15 @@
 
 Для квадратного SONOFF NSPanel Pro (480×480) есть отдельная панель: пункт **NEST NSPanel** в боковом меню, адрес `/alpicair-nest-wall`. Она рисуется под палец и не требует экранной клавиатуры: числа меняются кнопками − и +, ползунком или встроенной цифровой клавиатурой.
 
-- **Главный экран:** режим, цель с кнопками − и +, четыре температуры, вентиляторы, влажность.
-- **Меню:** Режим, Климат, Вентиляция, Качество воздуха, Расписание, Показания, Ошибки, Система, Сервис.
+- **Главный экран:** режим, скорость вентиляторов с кнопками − и + (крупно, в центре, под ней текущий режим; нажатие на круг открывает режимы), четыре температуры, цель по температуре, влажность. Кнопки меняют скорость текущего режима сразу у обоих вентиляторов, разница между ними сохраняется. Менять скорость могут администраторы.
+- **Меню:** Режим, Климат, Вентиляция, Качество воздуха, Расписание, Показания, Ошибки, Система, Сервис и кнопка перехода на другую панель.
 - **Подменю:** через них доступна каждая из 368 настроек установки. Сервис открывается PIN-клавиатурой.
 - **Расписание:** неделя, правка событий, копирование дня.
 - Через две минуты без касаний панель возвращается на главный экран и закрывает сервис. Назад можно вернуться кнопкой или свайпом вправо.
 
 Язык, тема и цвет меняются в **Система → Экран панели**. Если в Home Assistant есть `input_select.nspanel_language`, `input_select.nspanel_theme` и `input_select.nspanel_accent`, панель берёт значения из них. Иначе выбор хранится на устройстве.
+
+Куда ведёт кнопка в меню, выбирается значком рядом с ней или там же, в **Система → Экран панели**: из списка панелей и видов дашбордов. Выбор хранится на устройстве, а если есть `input_text.nspanel_home`, то в нём, и тогда он общий для всех устройств.
 
 Параметры адреса: `?lang=lv`, `?theme=dark`, `?accent=teal`, `?home=/путь` (куда вести кнопка выхода), `?unit=<entry_id>`. Показ в боковом меню отключается в **Настроить**.
 
@@ -121,6 +123,12 @@ Modbus TCP must be enabled on the unit (port 502 by default).
 ### Square wall panels
 
 The SONOFF NSPanel Pro (480×480) has a panel of its own: **NEST NSPanel** in the sidebar, at `/alpicair-nest-wall`. It has a home screen, a menu and submenus that reach all 368 settings, a schedule editor, faults and service access with an on-screen PIN pad, and it needs no on-screen keyboard. It returns to the home screen after two minutes without a touch.
+
+The home screen is built around fan speed: − and + change the current mode's speed on both fans at once and keep the difference between them, which takes an administrator. The current mode is shown under the speed, and tapping the ring opens the modes. The temperature target has its own screen, one tap away.
+
+The [NSPanel Pro Card](https://github.com/keziksdmitrijs-byte/nspanel-pro-card) can show this panel as its recuperator page (`type: nest_new`). It then takes the card's theme, accent and language, and its leave button goes back to the card's start screen.
+
+The menu has a button to another panel. Choose where it leads with the icon beside it, or under **System → Panel screen**, from a list of panels and dashboard views. The choice stays on the device, or in `input_text.nspanel_home` when that exists, which shares it between devices.
 
 Language, theme and accent are set under **System → Panel screen**, and follow `input_select.nspanel_language`, `input_select.nspanel_theme` and `input_select.nspanel_accent` when those exist. URL parameters: `?lang=lv`, `?theme=dark`, `?accent=teal`, `?home=/path` and `?unit=<entry_id>`. It stays within what an Android 8.1 WebView can run, which `tests/check_panels.js` enforces.
 

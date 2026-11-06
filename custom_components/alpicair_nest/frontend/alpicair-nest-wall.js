@@ -6,6 +6,10 @@
  * Wall panels run old browsers (Android 8.1 with a WebView that can be Chromium 61) on slow chips.
  * So: ES2018 only, no ?. or ??, no gap on flex, no inset, clamp, color-mix or backdrop-filter, and
  * short transform animations only. tests/check_panels.js enforces this and the menu's coverage.
+ *
+ * Another card can host it: set `embed` before `hass`, to { theme, accent, language, leave, unit }.
+ * Embedded, it fills its host instead of scaling itself, takes its look from the host, and leaving it
+ * fires `alpicair-nest-leave` instead of navigating. `home()` brings it back to the home screen.
  */
 
 const DOMAIN = "alpicair_nest";
@@ -14,6 +18,8 @@ const BASE = 480;
 const IDLE_MS = 120000;
 const SAVE_PAUSE = 800;
 const TARGET_STEP = 0.5;
+// one tap on the home screen, by Fans_ControlStrategy: %, m³/h, Pa
+const FAN_STEPS = { 0: 5, 1: 10, 2: 5 };
 const DAYS = 7;
 const EVENTS = 10;
 const MENU_MAX = 1.7;
@@ -27,6 +33,8 @@ const LANGUAGES = { lv: "Latviešu", ru: "Русский", en: "English" };
 const THEME_ENTITY = "input_select.nspanel_theme";
 const ACCENT_ENTITY = "input_select.nspanel_accent";
 const LANGUAGE_ENTITY = "input_select.nspanel_language";
+const HOME_ENTITY = "input_text.nspanel_home";
+const NOT_TARGETS = ["alpicair-nest-wall", "config", "developer-tools", "notfound", "profile"];
 
 const ICONS = {
   back: "M15 5l-7 7 7 7",
@@ -101,6 +109,7 @@ const STRINGS = {
     theme: "Тема", themes: { auto: "Авто", light: "Светлая", dark: "Тёмная" }, accent: "Акцент", language: "Язык",
     host: "Адрес", port: "Порт", unitId: "Адрес Modbus", protocol: "Протокол", mac: "MAC", ip: "IP установки",
     firmware: "Прошивка", bootloader: "Загрузчик", eeprom: "Записей в EEPROM", runningHours: "Моточасы", exit: "Выйти из панели",
+    menuButton: "Кнопка в меню", leadsTo: "Куда она ведёт",
     errors: {
       forbidden: "Для этого нужны права администратора", service_locked: "Сервис закрыт, введите PIN ещё раз",
       wrong_pin: "Неверный PIN", too_many_tries: (s) => `Слишком много попыток, подождите ${s} с`,
@@ -139,6 +148,7 @@ const STRINGS = {
     theme: "Tēma", themes: { auto: "Auto", light: "Gaiša", dark: "Tumša" }, accent: "Akcents", language: "Valoda",
     host: "Adrese", port: "Ports", unitId: "Modbus adrese", protocol: "Protokols", mac: "MAC", ip: "Iekārtas IP",
     firmware: "Programmatūra", bootloader: "Ielādētājs", eeprom: "EEPROM ieraksti", runningHours: "Darba stundas", exit: "Iziet no paneļa",
+    menuButton: "Poga izvēlnē", leadsTo: "Kur tā ved",
     errors: {
       forbidden: "Vajadzīgas administratora tiesības", service_locked: "Serviss aizvērts, ievadiet PIN vēlreiz",
       wrong_pin: "Nepareizs PIN", too_many_tries: (s) => `Pārāk daudz mēģinājumu, pagaidiet ${s} s`,
@@ -177,6 +187,7 @@ const STRINGS = {
     theme: "Theme", themes: { auto: "Auto", light: "Light", dark: "Dark" }, accent: "Accent", language: "Language",
     host: "Address", port: "Port", unitId: "Modbus unit ID", protocol: "Protocol", mac: "MAC", ip: "Unit IP",
     firmware: "Firmware", bootloader: "Bootloader", eeprom: "EEPROM writes", runningHours: "Running hours", exit: "Leave the panel",
+    menuButton: "Menu button", leadsTo: "Where it leads",
     errors: {
       forbidden: "This takes an administrator", service_locked: "Service has closed, enter the PIN again",
       wrong_pin: "Wrong PIN", too_many_tries: (s) => `Too many tries, wait ${s} s`,
@@ -517,36 +528,50 @@ button[disabled] { opacity: .45; }
 .badge .ic { width: 20px; height: 20px; margin-right: 5px; }
 .badge.warn { background: rgba(245, 158, 11, .16); color: #d97706; }
 .time { font-size: 28px; font-weight: 300; }
-.mid { flex: 1; min-height: 0; display: flex; margin-top: 8px; }
-.ring-card { position: relative; flex: 1 1 0; min-width: 0; margin-right: 8px; padding: 10px; background: var(--sf); border-radius: 24px; box-shadow: var(--sh); display: flex; flex-direction: column; align-items: center; justify-content: space-between; }
-.ring { position: relative; width: 192px; height: 192px; }
+.top .tap { width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; margin-right: 10px; border-radius: 14px; background: var(--sf); box-shadow: var(--sh); flex: none; }
+.fan-card { flex: 1; min-height: 0; display: flex; align-items: stretch; margin-top: 8px; padding: 10px; background: var(--sf); border-radius: 24px; box-shadow: var(--sh); }
+.fan-side { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; text-align: center; }
+.fan-who { flex: none; padding: 2px 0 8px; }
+.fan-who span { display: block; color: var(--tx2); font-size: 13px; }
+.fan-who b { display: block; font-size: 22px; font-weight: 500; }
+.fan-who small { display: block; color: var(--tx2); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fan-step { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; border-radius: 18px; background: rgba(var(--acc-rgb), .13); color: var(--acc); }
+.fan-step .ic { width: 40px; height: 40px; stroke-width: 2.4; }
+.ring-tap { flex: none; align-self: center; margin: 0 6px; }
+.ring { position: relative; width: 204px; height: 204px; }
+.ring.large { width: 262px; height: 262px; }
 .ring svg { display: block; width: 100%; height: 100%; }
 .ring-track, .ring-value { fill: none; stroke-width: 11; stroke-linecap: round; }
 .ring-track { stroke: var(--track); }
 .ring-value { stroke: var(--acc); transition: stroke-dasharray .25s ease-out; }
 .ring-dot { fill: var(--sf); stroke: var(--tx); stroke-width: 3; }
 .ring-text { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; }
-.ring-text b { font-size: 44px; font-weight: 300; letter-spacing: -1px; }
-.ring-text b small { margin-left: 1px; font-size: 18px; font-weight: 400; color: var(--tx2); letter-spacing: 0; }
+.ring-text b { font-size: 58px; font-weight: 300; line-height: 1.1; letter-spacing: -1px; }
+.ring-text b small { margin-left: 2px; font-size: 22px; font-weight: 400; color: var(--tx2); letter-spacing: 0; }
+.ring-text b.tight { font-size: 44px; }
+.ring-text b.tight small { font-size: 15px; }
 .ring-text span { margin-top: 2px; color: var(--tx2); font-size: 13px; }
+.ring-text .ring-mode { max-width: 150px; margin-top: 4px; color: var(--tx); font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ring-text .fan-wrap { display: block; width: 26px; height: 26px; margin: 0 0 2px; color: var(--acc); }
+.ring-text .fan-wrap .ic { width: 26px; height: 26px; }
+.ring-card { display: flex; flex-direction: column; align-items: center; justify-content: space-between; height: 100%; padding: 14px; background: var(--sf); border-radius: 24px; box-shadow: var(--sh); }
 .ring-buttons { display: flex; width: 100%; }
-.ring-buttons button { flex: 1; height: 54px; display: flex; align-items: center; justify-content: center; background: var(--sf3); border-radius: 16px; }
+.ring-buttons button { flex: 1; height: 72px; display: flex; align-items: center; justify-content: center; background: var(--sf3); border-radius: 18px; }
 .ring-buttons button + button { margin-left: 8px; }
-.air-card { flex: none; width: 196px; display: flex; flex-direction: column; padding: 4px 14px; background: var(--sf); border-radius: 24px; box-shadow: var(--sh); }
-.air-row { flex: 1; display: flex; flex-direction: column; justify-content: center; border-bottom: 1px solid var(--track); }
-.air-row:last-child { border-bottom: 0; }
-.air-row span { display: flex; align-items: center; color: var(--tx2); font-size: 13px; }
-.air-row span i { display: inline-block; width: 9px; height: 9px; margin-right: 6px; border-radius: 50%; }
-.air-row b { display: block; margin-top: 1px; font-size: 27px; font-weight: 400; }
+.temps { flex: none; display: flex; height: 62px; margin-top: 8px; background: var(--sf); border-radius: 20px; box-shadow: var(--sh); }
+.temp-cell { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; justify-content: center; padding-left: 12px; border-right: 1px solid var(--track); }
+.temp-cell:last-child { border-right: 0; }
+.temp-cell span { display: flex; align-items: center; color: var(--tx2); font-size: 12px; white-space: nowrap; overflow: hidden; }
+.temp-cell span i { flex: none; display: inline-block; width: 8px; height: 8px; margin-right: 5px; border-radius: 50%; }
+.temp-cell b { display: block; margin-top: 1px; font-size: 21px; font-weight: 400; }
 .fresh { background: #38bdf8; } .stale { background: #f97316; }
-.dock { flex: none; display: flex; height: 92px; margin-top: 8px; }
+.dock { flex: none; display: flex; height: 84px; margin-top: 8px; }
 .dock button { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; justify-content: center; padding: 8px 10px; background: var(--sf); border-radius: 20px; box-shadow: var(--sh); }
 .dock button + button { margin-left: 8px; }
 .dock span { display: block; color: var(--tx2); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dock b { display: block; margin-top: 2px; font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dock .ic { width: 22px; height: 22px; color: var(--acc); }
 .dock .accent .ic { color: #fff; }
-.dock .fan-wrap { width: 22px; height: 22px; overflow: visible; }
 .dock .accent { background: var(--acc); color: #fff; }
 .dock .accent span { color: rgba(255, 255, 255, .85); }
 .spin { animation: spin var(--speed, 2s) linear infinite; }
@@ -560,6 +585,15 @@ button[disabled] { opacity: .45; }
 .tile span { display: block; margin-top: 2px; color: var(--tx2); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tile .count { position: absolute; top: 12px; right: 12px; min-width: 24px; height: 24px; padding: 0 6px; border-radius: 12px; background: #ef4444; color: #fff; font-size: 13px; font-weight: 600; line-height: 24px; text-align: center; }
 .box { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex: none; border-radius: 14px; background: rgba(var(--acc-rgb), .13); color: var(--acc); }
+.grid.short { height: calc(100% - 64px); }
+.grid.short .tile { padding: 9px 12px; }
+.grid.short .tile .box { width: 36px; height: 36px; border-radius: 12px; }
+.grid.short .tile .box .ic { width: 22px; height: 22px; }
+.leave { display: flex; height: 56px; margin-top: 8px; }
+.leave button { display: flex; align-items: center; justify-content: center; height: 100%; border-radius: 18px; }
+.leave .out { flex: 1 1 0; min-width: 0; padding: 0 14px; background: var(--acc); color: #fff; }
+.leave .out b { margin-left: 8px; font-size: 17px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.leave .set { flex: none; width: 56px; margin-left: 8px; background: var(--sf); box-shadow: var(--sh); }
 
 /* lists */
 .group { margin-bottom: 8px; background: var(--sf); border-radius: 20px; box-shadow: var(--sh); overflow: hidden; }
@@ -740,6 +774,22 @@ class AlpicAirNestWall extends HTMLElement {
     return this._hass;
   }
 
+  set embed(value) {
+    this._embed = value || null;
+    this._fit();
+    if (this._ready) this._look();
+  }
+
+  get embed() {
+    return this._embed;
+  }
+
+  home() {
+    if (!this._ready) return;
+    this._token = null;
+    this._goHome();
+  }
+
   set narrow(_value) {}
 
   set panel(_value) {}
@@ -832,15 +882,16 @@ class AlpicAirNestWall extends HTMLElement {
   _look() {
     const app = this.shadowRoot.querySelector(".app");
     if (!app) return;
-    const wanted = QUERY.get("lang") || this._state(LANGUAGE_ENTITY) || stored.get("language") || this._hass.language || "en";
+    const embed = this._embed || {};
+    const wanted = embed.language || QUERY.get("lang") || this._state(LANGUAGE_ENTITY) || stored.get("language") || this._hass.language || "en";
     const language = wanted.split("-")[0];
     this._language = STRINGS[language] ? language : "en";
-    const chosen = QUERY.get("theme") || this._state(THEME_ENTITY) || stored.get("theme") || "auto";
+    const chosen = embed.theme || QUERY.get("theme") || this._state(THEME_ENTITY) || stored.get("theme") || "auto";
     const darkHass = this._hass && this._hass.themes && this._hass.themes.darkMode;
     const systemDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
     const dark = chosen === "dark" || (chosen !== "light" && (darkHass || systemDark));
-    const name = QUERY.get("accent") || this._state(ACCENT_ENTITY) || stored.get("accent") || "blue";
-    const accent = ACCENTS[name] || ACCENTS.blue;
+    const name = embed.accent || QUERY.get("accent") || this._state(ACCENT_ENTITY) || stored.get("accent") || "blue";
+    const accent = ACCENTS[name] || (/^#[0-9a-f]{6}$/i.test(name) ? name : ACCENTS.blue);
     const look = `app ${dark ? "t-dark" : "t-light"}`;
     if (app.className !== look) app.className = look;
     if (this._accent !== accent) {
@@ -855,6 +906,15 @@ class AlpicAirNestWall extends HTMLElement {
   _fit() {
     const app = this.shadowRoot.querySelector(".app");
     if (!app) return;
+    if (this._embed) {
+      // the host has already scaled the space it gives
+      app.style.zoom = 1;
+      app.style.width = "100%";
+      app.style.height = "100%";
+      app.style.marginLeft = "0px";
+      return;
+    }
+    app.style.width = "";
     const box = this.getBoundingClientRect();
     const width = box.width || window.innerWidth;
     const height = box.height || window.innerHeight;
@@ -882,7 +942,8 @@ class AlpicAirNestWall extends HTMLElement {
         this._message(this._t.noUnit);
         return;
       }
-      const known = this._units.find((unit) => unit.entry_id === (QUERY.get("unit") || this._entry));
+      const wanted = (this._embed && this._embed.unit) || QUERY.get("unit") || this._entry;
+      const known = this._units.find((unit) => unit.entry_id === wanted);
       this._entry = (known || this._units[0]).entry_id;
       await this._load();
     } catch (err) {
@@ -981,10 +1042,31 @@ class AlpicAirNestWall extends HTMLElement {
     }
   }
 
-  _exit() {
+  _homeTarget() {
     const panels = (this._hass && this._hass.panels) || {};
-    const target = QUERY.get("home") || (panels["nspanel-pro"] ? "/nspanel-pro/home" : "/");
-    history.pushState(null, "", target);
+    const shared = this._state(HOME_ENTITY);
+    const chosen = QUERY.get("home") || (shared && shared.startsWith("/") ? shared : stored.get("home"));
+    return chosen || (panels["nspanel-pro"] ? "/nspanel-pro/home" : "/");
+  }
+
+  _panelTitle(panel) {
+    const translated = this._hass.localize ? this._hass.localize(`panel.${panel.title}`) : "";
+    return translated || panel.title;
+  }
+
+  _homeName() {
+    const path = this._homeTarget();
+    const panel = (this._hass.panels || {})[path.split("/")[1]];
+    if (panel && panel.title) return this._panelTitle(panel);
+    return path === "/" ? "Home Assistant" : path;
+  }
+
+  _exit() {
+    if (this._embed) {
+      this.dispatchEvent(new CustomEvent("alpicair-nest-leave", { bubbles: true, composed: true }));
+      return;
+    }
+    history.pushState(null, "", this._homeTarget());
     window.dispatchEvent(new CustomEvent("location-changed", { bubbles: true, composed: true }));
   }
 
@@ -999,6 +1081,7 @@ class AlpicAirNestWall extends HTMLElement {
     stage.appendChild(screen);
     if (top.view === "week" || top.view === "day") this._ensureSchedule();
     if (top.view === "history") this._loadHistory();
+    if (top.view === "targets") this._loadTargets();
     this._refresh();
   }
 
@@ -1049,6 +1132,7 @@ class AlpicAirNestWall extends HTMLElement {
     root.querySelectorAll("[data-live]").forEach((node) => set(node, this._live(node.dataset.live)));
     const view = this._top.view;
     if (view === "home") this._refreshHome();
+    if (view === "temp") this._refreshTemp();
     if (view === "modes") this._refreshModes();
     if (view === "editor") this._showValue();
     if (view === "branch" && this._nodes[this._top.id].service) this._tick();
@@ -1098,44 +1182,165 @@ class AlpicAirNestWall extends HTMLElement {
 
   _view_home() {
     const t = this._t;
-    const C = 2 * Math.PI * 82;
-    this._arc = C * 0.75;
-    const row = (kind, label, name) => `<div class="air-row"><span><i class="${kind}"></i>${esc(label)}</span><b data-deg="${name}"></b></div>`;
+    const side = (id, label, step, glyph) => `<div class="fan-side">
+        <div class="fan-who"><span>${esc(label)}</span><b id="h-${id}"></b><small id="h-${id}-rpm"></small></div>
+        <button class="fan-step" data-fan="${step}" aria-label="${step < 0 ? "−" : "+"}">${icon(glyph)}</button>
+      </div>`;
+    const cell = (kind, label, name) => `<div class="temp-cell"><span><i class="${kind}"></i>${esc(label)}</span><b data-deg="${name}"></b></div>`;
     return `<div class="home">
       <div class="top">
+        ${this._embed ? `<button class="tap" data-do="exit" aria-label="${esc(t.exit)}">${icon("back")}</button>` : ""}
         <div class="state"><b id="h-mode"></b><span id="h-how"></span></div>
         <button class="badge" id="h-faults" data-node="faults" hidden></button>
         <div class="time" id="h-time"></div>
       </div>
-      <div class="mid">
-        <div class="ring-card">
-          <div class="ring">
-            <svg viewBox="0 0 200 200" aria-hidden="true">
-              <circle class="ring-track" cx="100" cy="100" r="82" transform="rotate(135 100 100)" stroke-dasharray="${this._arc.toFixed(1)} ${C.toFixed(1)}"/>
-              <circle class="ring-value" id="h-arc" cx="100" cy="100" r="82" transform="rotate(135 100 100)" stroke-dasharray="0 ${C.toFixed(1)}"/>
-              <circle class="ring-dot" id="h-dot" r="7" cx="100" cy="18"/>
-            </svg>
-            <div class="ring-text"><b id="h-target"></b><span id="h-current"></span></div>
-          </div>
-          <div class="ring-buttons">
-            <button data-do="target" data-step="-1" aria-label="−">${icon("minus")}</button>
-            <button data-do="target" data-step="1" aria-label="+">${icon("plus")}</button>
-          </div>
-        </div>
-        <button class="air-card" data-do="flow">
-          ${row("fresh", t.outdoor, "T_Outdoor")}
-          ${row("fresh", t.toRooms, "T_Supply")}
-          ${row("stale", t.fromRooms, "T_Extract")}
-          ${row("stale", t.exhaust, "T_Exhaust")}
-        </button>
+      <div class="fan-card">
+        ${side("supply", t.supply, -1, "minus")}
+        <button class="ring-tap" data-node="mode">${this._ring("", `<span class="fan-wrap" id="h-fan">${icon("fan")}</span><b id="r-value"></b><span class="ring-mode" id="r-note"></span>`)}</button>
+        ${side("extract", t.extract, 1, "plus")}
       </div>
+      <button class="temps" data-do="flow">
+        ${cell("fresh", t.outdoor, "T_Outdoor")}
+        ${cell("fresh", t.toRooms, "T_Supply")}
+        ${cell("stale", t.fromRooms, "T_Extract")}
+        ${cell("stale", t.exhaust, "T_Exhaust")}
+      </button>
       <div class="dock">
         <button data-node="mode">${icon("power")}<b id="h-dock-mode"></b><span>${esc(t.mode)}</span></button>
-        <button data-node="vent"><span class="fan-wrap" id="h-fan">${icon("fan")}</span><b id="h-dock-fan"></b><span>${esc(t.fan)}</span></button>
+        <button data-do="temp">${icon("thermo")}<b id="h-dock-temp"></b><span>${esc(t.temperature)}</span></button>
         <button data-do="air">${icon("drop")}<b id="h-dock-air"></b><span id="h-dock-air-label"></span></button>
         <button class="accent" data-do="menu">${icon("grid")}<b>${esc(t.menu)}</b></button>
       </div>
     </div>`;
+  }
+
+  _ring(cls, text) {
+    const C = 2 * Math.PI * 82;
+    this._arc = C * 0.75;
+    return `<div class="ring ${cls}">
+      <svg viewBox="0 0 200 200" aria-hidden="true">
+        <circle class="ring-track" cx="100" cy="100" r="82" transform="rotate(135 100 100)" stroke-dasharray="${this._arc.toFixed(1)} ${C.toFixed(1)}"/>
+        <circle class="ring-value" id="r-arc" cx="100" cy="100" r="82" transform="rotate(135 100 100)" stroke-dasharray="0 ${C.toFixed(1)}"/>
+        <circle class="ring-dot" id="r-dot" r="7" cx="100" cy="18"/>
+      </svg>
+      <div class="ring-text">${text}</div>
+    </div>`;
+  }
+
+  // the arc shows what is asked for, the dot what is happening; both as shares of the range
+  _showRing(share, place) {
+    const root = this.shadowRoot;
+    const circle = 2 * Math.PI * 82;
+    const part = (value) => (value === null || value === undefined || Number.isNaN(value) ? 0 : Math.min(1, Math.max(0, value)));
+    root.getElementById("r-arc").setAttribute("stroke-dasharray", `${(this._arc * part(share)).toFixed(1)} ${circle.toFixed(1)}`);
+    const angle = ((135 + 270 * part(place)) * Math.PI) / 180;
+    const dot = root.getElementById("r-dot");
+    dot.setAttribute("cx", (100 + 82 * Math.cos(angle)).toFixed(1));
+    dot.setAttribute("cy", (100 + 82 * Math.sin(angle)).toFixed(1));
+  }
+
+  _put(id, text) {
+    const node = this.shadowRoot.getElementById(id);
+    if (node.textContent !== text) node.textContent = text;
+  }
+
+  // the fans
+
+  _fanName(mode, fan) {
+    const strategy = this._sp.Fans_ControlStrategy;
+    const suffix = { 1: "Unoccupied", 2: "Economy", 3: "Comfort", 4: "Boost", 5: "KitchenHood" }[mode];
+    const start = { 0: `Linear_Fan${fan}_Fanspeed_`, 1: `Constant_Airflow_Fan${fan}_`, 2: `Constant_Pressure_Fan${fan}_` }[strategy];
+    if (!suffix || !start) return null;
+    return start + (strategy === 0 ? suffix.replace("Hood", "hood") : suffix);
+  }
+
+  // the two settings behind the current mode; none when off, or when the fans follow an outside signal
+  _fanItems() {
+    const mode = this._dp.CurrentOperatingMode;
+    const items = [1, 2].map((fan) => this._setpoints[this._fanName(mode, fan)]);
+    return items[0] && items[1] ? items : null;
+  }
+
+  _fanNow() {
+    const name = { 1: "Airflow_Supply", 2: "Pressure_1" }[this._sp.Fans_ControlStrategy] || "Fan1_Output";
+    return { value: this._dp[name], unit: this._unit(this._datapoints[name] ? this._datapoints[name].unit : "%") };
+  }
+
+  _refreshFan() {
+    const items = this._fanItems();
+    const now = this._fanNow();
+    const item = items ? items[0] : { min: 0, max: 100 };
+    const pending = items && this._pendingFan && this._pendingFan.items[0].name === item.name ? this._pendingFan : null;
+    const asked = items ? (pending ? pending.values[0] : this._sp[item.name]) : now.value;
+    const range = item.max - item.min;
+    this._showRing((asked - item.min) / range, (or(now.value, item.min) - item.min) / range);
+    const value = this.shadowRoot.getElementById("r-value");
+    value.innerHTML = `${esc(this._number(asked))}<small>${esc(now.unit)}</small>`;
+    value.className = now.unit === "%" ? "" : "tight";
+    this._put("r-note", this._modeState().mode);
+    this._put("h-supply", this._reading("Fan1_Output", 0));
+    this._put("h-extract", this._reading("Fan2_Output", 0));
+    this._put("h-supply-rpm", this._reading("Fan1_RPM"));
+    this._put("h-extract-rpm", this._reading("Fan2_RPM"));
+    this.shadowRoot.querySelectorAll("[data-fan]").forEach((button) => {
+      button.disabled = !items;
+    });
+    const fan = this.shadowRoot.getElementById("h-fan");
+    const output = or(this._dp.Fan1_Output, 0);
+    fan.classList.toggle("spin", output > 0);
+    fan.style.setProperty("--speed", `${Math.max(0.5, 3.2 - output / 40).toFixed(1)}s`);
+  }
+
+  _nudgeFan(direction) {
+    const items = this._fanItems();
+    if (!items) return;
+    if (!this._canChange(items[0])) {
+      this._toast(this._t.adminOnly);
+      return;
+    }
+    const pending = this._pendingFan;
+    const same = pending && pending.items[0].name === items[0].name;
+    const values = same ? pending.values : items.map((item) => or(this._sp[item.name], item.min));
+    // both move by the same amount, so the balance between supply and extract stays as it was
+    let change = direction * FAN_STEPS[this._sp.Fans_ControlStrategy];
+    items.forEach((item, index) => {
+      change = Math.min(item.max - values[index], Math.max(item.min - values[index], change));
+    });
+    if (!change && !same) return;
+    this._pendingFan = { items, values: values.map((value) => value + change) };
+    this._refreshFan();
+    clearTimeout(this._fanTimer);
+    // like the temperature, these live in EEPROM: one write when the tapping stops
+    this._fanTimer = setTimeout(() => this._saveFan(), SAVE_PAUSE);
+  }
+
+  async _saveFan() {
+    const pending = this._pendingFan;
+    try {
+      for (let index = 0; index < pending.items.length; index += 1) {
+        const name = pending.items[index].name;
+        const result = await this._call("write", { name, value: pending.values[index] });
+        this._sp[name] = result.value;
+      }
+    } catch (err) {
+      this._toast(this._problem(err));
+    }
+    if (this._pendingFan === pending) this._pendingFan = null;
+    this._refresh();
+  }
+
+  // temperature
+
+  _view_temp() {
+    const t = this._t;
+    return `${this._bar(t.temperature, this._modeState().mode)}
+      <div class="body"><div class="ring-card">
+        ${this._ring("large", `<b id="r-value"></b><span id="r-note"></span>`)}
+        <div class="ring-buttons">
+          <button data-do="target" data-step="-1" aria-label="−">${icon("minus")}</button>
+          <button data-do="target" data-step="1" aria-label="+">${icon("plus")}</button>
+        </div>
+      </div></div>`;
   }
 
   _targetName() {
@@ -1159,42 +1364,33 @@ class AlpicAirNestWall extends HTMLElement {
     return Math.min(high, Math.max(low, raw));
   }
 
+  _refreshTemp() {
+    const t = this._t;
+    const value = this._targetValue();
+    const { low, high } = this._targetLimits();
+    const extract = this._sp.AirTemp_ControlStrategy === 1;
+    const current = this._dp[extract ? "T_Extract" : "T_Supply"];
+    const range = high - low;
+    this._showRing(value === null ? 0 : (value - low) / range, (or(current, low) - low) / range);
+    this.shadowRoot.getElementById("r-value").innerHTML = value === null ? "—" : `${this._number(value, 1)}<small>°C</small>`;
+    this._put("r-note", `${extract ? t.extract : t.supply} ${this._degrees(current)}`);
+  }
+
   _refreshHome() {
     const t = this._t;
     const root = this.shadowRoot;
     const { mode, how } = this._modeState();
-    const put = (id, text) => {
-      const node = root.getElementById(id);
-      if (node.textContent !== text) node.textContent = text;
-    };
     const phase = t.phases[this._dp.AirTemp_PhaseControl_WhatPhase];
     const running = this._dp.CurrentOperatingMode !== 0;
-    put("h-mode", mode);
-    put("h-how", [how, running ? phase : ""].filter(Boolean).join(" · "));
-    put("h-time", this._clock());
-    const value = this._targetValue();
-    const { low, high } = this._targetLimits();
-    const share = value === null || high <= low ? 0 : (value - low) / (high - low);
-    const circle = 2 * Math.PI * 82;
-    root.getElementById("h-arc").setAttribute("stroke-dasharray", `${(this._arc * share).toFixed(1)} ${circle.toFixed(1)}`);
-    root.getElementById("h-target").innerHTML = value === null ? "—" : `${this._number(value, 1)}<small>°C</small>`;
-    const extract = this._sp.AirTemp_ControlStrategy === 1;
-    const current = this._dp[extract ? "T_Extract" : "T_Supply"];
-    put("h-current", `${extract ? t.extract : t.supply} ${this._degrees(current)}`);
-    const dot = root.getElementById("h-dot");
-    const place = current === undefined || current === null || high <= low ? 0 : Math.min(1, Math.max(0, (current - low) / (high - low)));
-    const angle = ((135 + 270 * place) * Math.PI) / 180;
-    dot.setAttribute("cx", (100 + 82 * Math.cos(angle)).toFixed(1));
-    dot.setAttribute("cy", (100 + 82 * Math.sin(angle)).toFixed(1));
-
-    put("h-dock-mode", mode);
-    put("h-dock-fan", this._reading("Fan1_Output", 0));
-    const fan = root.getElementById("h-fan");
-    fan.classList.toggle("spin", running);
-    fan.style.setProperty("--speed", `${Math.max(0.5, 3.2 - or(this._dp.Fan1_Output, 0) / 40).toFixed(1)}s`);
+    this._put("h-mode", mode);
+    this._put("h-how", [how, running ? phase : ""].filter(Boolean).join(" · "));
+    this._put("h-time", this._clock());
+    this._refreshFan();
+    this._put("h-dock-mode", mode);
+    this._put("h-dock-temp", this._degrees(this._targetValue()));
     const air = this._airValue();
-    put("h-dock-air", air[1]);
-    put("h-dock-air-label", air[0]);
+    this._put("h-dock-air", air[1]);
+    this._put("h-dock-air-label", air[0]);
     const badge = root.getElementById("h-faults");
     const faults = this._status.faults;
     badge.hidden = !faults.length;
@@ -1216,7 +1412,7 @@ class AlpicAirNestWall extends HTMLElement {
     if (start === null) return;
     const { low, high } = this._targetLimits();
     this._pendingTarget = { name, value: Math.min(high, Math.max(low, start + direction * TARGET_STEP)) };
-    this._refreshHome();
+    this._refreshTemp();
     clearTimeout(this._targetTimer);
     // the value lives in EEPROM: one write when the tapping stops, not one per tap
     this._targetTimer = setTimeout(async () => {
@@ -1247,9 +1443,14 @@ class AlpicAirNestWall extends HTMLElement {
     return `<div class="bar">
         <button class="tap" data-do="home" aria-label="home">${icon("home")}</button>
         <div class="bar-text"><b>${esc(t.menu)}</b></div>
-        <button class="tap" data-do="exit" aria-label="${esc(t.exit)}">${icon("exit")}</button>
       </div>
-      <div class="body"><div class="grid">${TREE.map(tile).join("")}</div></div>`;
+      <div class="body">
+        <div class="grid short">${TREE.map(tile).join("")}</div>
+        <div class="leave">
+          <button class="out" data-do="exit" aria-label="${esc(t.exit)}">${icon("exit")}<b>${esc(this._embed ? this._embed.leave || t.exit : this._homeName())}</b></button>
+          ${this._embed ? "" : `<button class="set" data-do="targets" aria-label="${esc(t.menuButton)}">${icon("sliders")}</button>`}
+        </div>
+      </div>`;
   }
 
   _items(node) {
@@ -1269,6 +1470,7 @@ class AlpicAirNestWall extends HTMLElement {
     const t = this._t;
     const node = this._nodes[top.id];
     const rows = node.kids
+      .filter((kid) => !(this._embed && kid.id === "screen"))
       .map((kid) => {
         const entry = this._nodes[kid.id];
         return `<button class="row" data-node="${kid.id}"><div class="box">${icon(kid.icon)}</div>
@@ -1332,13 +1534,9 @@ class AlpicAirNestWall extends HTMLElement {
   }
 
   _modeFacts(mode) {
-    const suffix = { 1: "Unoccupied", 2: "Economy", 3: "Comfort", 4: "Boost", 5: "Kitchen" }[mode];
-    const hood = { 5: "Kitchenhood" }[mode] || suffix;
-    const strategy = this._sp.Fans_ControlStrategy;
-    let speed = "";
-    if (strategy === 0) speed = `${this._number(this._sp[`Linear_Fan1_Fanspeed_${hood}`])} %`;
-    if (strategy === 1) speed = `${this._number(this._sp[`Constant_Airflow_Fan1_${mode === 5 ? "KitchenHood" : suffix}`])} ${this._unit("m³/h")}`;
-    if (strategy === 2) speed = `${this._number(this._sp[`Constant_Pressure_Fan1_${mode === 5 ? "KitchenHood" : suffix}`])} ${this._unit("Pa")}`;
+    const suffix = { 1: "Unoccupied", 2: "Economy", 3: "Comfort" }[mode];
+    const fan = this._setpoints[this._fanName(mode, 1)];
+    const speed = fan ? this._setting(fan) : "";
     const side = this._sp.AirTemp_ControlStrategy === 1 ? "Extract" : "Supply";
     const target = mode <= 3 ? this._degrees(this._sp[`AirTemp_${side}Target_${suffix}`]) : "";
     const timer = mode === 4 && this._sp.BoostMode_Timer ? `${this._number(this._sp.BoostMode_Timer)} ${this._unit("min")}` : "";
@@ -1794,7 +1992,60 @@ class AlpicAirNestWall extends HTMLElement {
         <div class="swatches">${Object.keys(ACCENTS).map((name) => `<button data-look="accent:${name}" style="background:${ACCENTS[name]}" aria-label="${name}">${name === accent ? icon("check") : ""}</button>`).join("")}</div>
         <div class="caption">${esc(t.language)}</div>
         <div class="seg">${Object.keys(LANGUAGES).map((name) => `<button data-look="language:${name}" class="${name === language ? "on" : ""}">${LANGUAGES[name]}</button>`).join("")}</div>
+        <div class="caption">${esc(t.menuButton)}</div>
+        <div class="group"><button class="row" data-do="targets"><div class="box">${icon("exit")}</div>
+          <div class="row-text"><b>${esc(this._homeName())}</b></div>${icon("chevron", "go")}</button></div>
       </div>`;
+  }
+
+  // where the menu's button leads: every panel, and each view of a dashboard
+
+  _view_targets(top) {
+    const t = this._t;
+    const current = this._homeTarget();
+    const rows = (top.list || [])
+      .map((entry) => `<button class="row" data-target="${esc(entry.path)}"><div class="row-text"><b>${esc(entry.title)}</b>${entry.view ? `<span>${esc(entry.view)}</span>` : ""}</div>${entry.path === current ? icon("check") : ""}</button>`)
+      .join("");
+    return `${this._bar(t.menuButton, t.leadsTo, false)}
+      <div class="body">${rows ? `<div class="group">${rows}</div>` : `<div class="empty">${esc(t.loading)}</div>`}</div>`;
+  }
+
+  async _panelTargets(panel) {
+    const path = `/${panel.url_path}`;
+    const title = this._panelTitle(panel);
+    if (panel.component_name !== "lovelace") return [{ path, title }];
+    try {
+      const config = await this._hass.callWS({ type: "lovelace/config", url_path: panel.url_path });
+      const views = (config.views || []).filter((view) => !view.subview);
+      if (views.length) return views.map((view, index) => ({ path: `${path}/${view.path || index}`, title, view: view.title || view.path || String(index + 1) }));
+    } catch (err) {
+      // a dashboard made by a strategy has no views to list; it can still be opened as a whole
+    }
+    return [{ path, title }];
+  }
+
+  async _loadTargets() {
+    const top = this._top;
+    if (top.list) return;
+    const panels = Object.keys(this._hass.panels)
+      .map((key) => this._hass.panels[key])
+      .filter((panel) => panel.title && !panel.url_path.startsWith("_") && !NOT_TARGETS.includes(panel.url_path))
+      .sort((a, b) => (b.component_name === "lovelace") - (a.component_name === "lovelace"));
+    const found = await Promise.all(panels.map((panel) => this._panelTargets(panel)));
+    top.list = [{ path: "/", title: "Home Assistant" }].concat(...found);
+    if (this._top === top) this._draw();
+  }
+
+  async _setHome(path) {
+    stored.set("home", path);
+    const shared = this._state(HOME_ENTITY) !== null;
+    try {
+      if (shared) await this._hass.callService("input_text", "set_value", { entity_id: HOME_ENTITY, value: path });
+      this._toast(this._t.saved);
+    } catch (err) {
+      this._toast(this._problem(err));
+    }
+    setTimeout(() => this._back(), shared ? 400 : 0);
   }
 
   async _setLook(key, value) {
@@ -1898,7 +2149,7 @@ class AlpicAirNestWall extends HTMLElement {
 
   _onClick(event) {
     const node = event.target.closest(
-      "[data-do],[data-node],[data-edit],[data-press],[data-mode],[data-pick],[data-day],[data-event],[data-copy],[data-ev-mode],[data-reading],[data-key],[data-pin],[data-look],[data-unit]"
+      "[data-do],[data-node],[data-edit],[data-press],[data-mode],[data-pick],[data-day],[data-event],[data-copy],[data-ev-mode],[data-reading],[data-key],[data-pin],[data-look],[data-unit],[data-target]"
     );
     if (!node || node.disabled) return;
     const data = node.dataset;
@@ -1917,6 +2168,7 @@ class AlpicAirNestWall extends HTMLElement {
     else if (data.pin !== undefined) this._pinKey(data.pin);
     else if (data.look) this._setLook(data.look.split(":")[0], data.look.split(":")[1]);
     else if (data.unit) this._switchUnit(data.unit);
+    else if (data.target) this._setHome(data.target);
   }
 
   _action(name) {
@@ -1926,6 +2178,8 @@ class AlpicAirNestWall extends HTMLElement {
       case "home": this._goHome(); break;
       case "menu": this._go("menu"); break;
       case "exit": this._exit(); break;
+      case "targets": this._go("targets"); break;
+      case "temp": this._go("temp"); break;
       case "flow": this._go("flow"); break;
       case "air": this._open(this._airValue()[0] === this._t.recovery ? "readings" : "air"); break;
       case "target": break;
@@ -2074,19 +2328,22 @@ class AlpicAirNestWall extends HTMLElement {
   // the steppers repeat while held, faster the longer they are held
 
   _onPress(event) {
-    const hold = event.target.closest("[data-hold],[data-hold-event]");
+    const hold = event.target.closest("[data-hold],[data-hold-event],[data-fan]");
     const target = event.target.closest('[data-do="target"]');
     if (target) {
       this._nudgeTarget(Number(target.dataset.step));
       return;
     }
-    if (!hold) return;
-    const step = hold.dataset.hold
-      ? (factor) => this._stepValue(Number(hold.dataset.hold), factor)
-      : () => {
-          const parts = hold.dataset.holdEvent.split(":");
-          this._stepEvent(parts[0], Number(parts[1]));
-        };
+    if (!hold || hold.disabled) return;
+    let step;
+    if (hold.dataset.fan) step = () => this._nudgeFan(Number(hold.dataset.fan));
+    else if (hold.dataset.hold) step = (factor) => this._stepValue(Number(hold.dataset.hold), factor);
+    else {
+      step = () => {
+        const parts = hold.dataset.holdEvent.split(":");
+        this._stepEvent(parts[0], Number(parts[1]));
+      };
+    }
     step(1);
     let count = 0;
     this._stopHold();
@@ -2122,5 +2379,6 @@ class AlpicAirNestWall extends HTMLElement {
 AlpicAirNestWall.TREE = TREE;
 AlpicAirNestWall.TITLES = TITLES;
 AlpicAirNestWall.STRINGS = STRINGS;
+AlpicAirNestWall.EMBED = 1;
 
 if (!customElements.get("alpicair-nest-wall")) customElements.define("alpicair-nest-wall", AlpicAirNestWall);

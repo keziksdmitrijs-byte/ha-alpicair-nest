@@ -62,6 +62,18 @@ for (const register of table.sp) {
 }
 for (const [id, count] of reached) if (count === 0) problems.push(`menu: ${id} is empty`);
 
+// the home screen's speed control writes to registers it names itself
+const settings = new Set(table.sp.map((register) => register.n));
+const fanName = sandbox.Wall.prototype._fanName;
+for (const strategy of [0, 1, 2]) {
+  for (const mode of [1, 2, 3, 4, 5]) {
+    for (const fan of [1, 2]) {
+      const name = fanName.call({ _sp: { Fans_ControlStrategy: strategy } }, mode, fan);
+      if (!settings.has(name)) problems.push(`fans: ${name} is not a setting`);
+    }
+  }
+}
+
 const keys = (object) => Object.keys(object).sort().join(" ");
 if (keys(STRINGS.ru) !== keys(STRINGS.lv) || keys(STRINGS.ru) !== keys(STRINGS.en)) {
   const all = new Set([...Object.keys(STRINGS.ru), ...Object.keys(STRINGS.lv), ...Object.keys(STRINGS.en)]);
