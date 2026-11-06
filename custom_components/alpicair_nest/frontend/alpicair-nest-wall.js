@@ -7,14 +7,16 @@
  * So: ES2018 only, no ?. or ??, no gap on flex, no inset, clamp, color-mix or backdrop-filter, and
  * short transform animations only. tests/check_panels.js enforces this and the menu's coverage.
  *
- * Another card can host it: set `embed` before `hass`, to { theme, accent, language, leave, unit }.
+ * Another card can host it: set `embed` before `hass`, to { theme, accent, language, leave, unit, width, height },
+ * width and height being the room it gets, in the host's pixels.
  * Embedded, it fills its host instead of scaling itself, takes its look from the host, and leaving it
  * fires `alpicair-nest-leave` instead of navigating. `home()` brings it back to the home screen.
  */
 
 const DOMAIN = "alpicair_nest";
 const QUERY = new URLSearchParams(location.search);
-const BASE = 480;
+// drawn for this width and scaled to the screen: below 480 so text and buttons come out larger
+const BASE = 420;
 const IDLE_MS = 120000;
 const SAVE_PAUSE = 800;
 const TARGET_STEP = 0.5;
@@ -548,7 +550,7 @@ button[disabled] { opacity: .45; }
 .fan-step { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; border-radius: 18px; background: rgba(var(--acc-rgb), .13); color: var(--acc); }
 .fan-step .ic { width: 40px; height: 40px; stroke-width: 2.4; }
 .ring-tap { flex: none; align-self: center; margin: 0 6px; }
-.ring { position: relative; width: 204px; height: 204px; }
+.ring { position: relative; width: 184px; height: 184px; }
 .ring.large { width: 262px; height: 262px; }
 .ring svg { display: block; width: 100%; height: 100%; }
 .ring-track, .ring-value { fill: none; stroke-width: 11; stroke-linecap: round; }
@@ -589,20 +591,20 @@ button[disabled] { opacity: .45; }
 
 /* home: the house */
 .house-wrap { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
-.house { position: relative; width: 460px; height: 352px; flex: none; }
+.house { position: relative; width: 460px; height: 352px; flex: none; zoom: .84; }
 .house > svg { position: absolute; top: 0; left: 0; width: 460px; height: 352px; }
-.house .clock { position: absolute; left: 150px; top: 4px; width: 160px; text-align: center; font-size: 24px; font-weight: 700; }
-.house .badge { position: absolute; right: 0; top: 0; height: 40px; margin: 0; padding: 0 12px; border-radius: 20px; font-size: 17px; font-weight: 700; }
-.house .tap { position: absolute; left: 104px; top: 0; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 14px; background: var(--sf); box-shadow: var(--sh); }
-.hl { position: absolute; width: 80px; text-align: center; font-size: 32px; font-weight: 500; line-height: 1.1; white-space: nowrap; }
-.house-mid { position: absolute; left: 150px; top: 180px; width: 160px; display: flex; flex-direction: column; align-items: center; }
-.house-speed { display: flex; align-items: baseline; justify-content: center; min-width: 120px; height: 55px; border-radius: 16px; }
-.house-speed b { font-size: 56px; font-weight: 300; letter-spacing: -1px; line-height: 1; }
+.house .clock { position: absolute; left: 160px; top: 2px; width: 140px; text-align: center; font-size: 28px; font-weight: 700; }
+.house .badge { position: absolute; right: 0; top: 0; height: 48px; margin: 0; padding: 0 14px; border-radius: 24px; font-size: 20px; font-weight: 700; }
+.house .tap { position: absolute; left: 0; top: 0; width: 52px; height: 52px; display: flex; align-items: center; justify-content: center; border-radius: 14px; background: var(--sf); box-shadow: var(--sh); }
+.hl { position: absolute; width: 84px; text-align: center; font-size: 36px; font-weight: 500; line-height: 1.1; white-space: nowrap; }
+.house-mid { position: absolute; left: 142px; top: 178px; width: 176px; display: flex; flex-direction: column; align-items: center; }
+.house-speed { display: flex; align-items: baseline; justify-content: center; min-width: 120px; height: 66px; border-radius: 16px; }
+.house-speed b { font-size: 64px; font-weight: 300; letter-spacing: -1px; line-height: 1; }
 .house-speed small { margin-left: 2px; font-size: 20px; color: var(--tx2); }
-.house-mode { display: flex; align-items: center; justify-content: center; min-width: 116px; max-width: 160px; height: 63px; margin-top: 4px; padding: 0 14px; border-radius: 18px; background: rgba(var(--acc-rgb), .12); font-size: 15px; font-weight: 600; }
-.house-mode .ic { width: 16px; height: 16px; margin-right: 6px; }
+.house-mode { display: flex; align-items: center; justify-content: center; min-width: 130px; max-width: 168px; height: 66px; margin-top: 2px; padding: 0 14px; border-radius: 20px; background: rgba(var(--acc-rgb), .12); font-size: 20px; font-weight: 600; }
+.house-mode .ic { width: 20px; height: 20px; margin-right: 6px; flex: none; }
 .house-mode span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dock.tall { height: 98px; margin-top: 10px; }
+.dock.tall { height: 96px; margin-top: 8px; }
 .dock.tall b { font-size: 18px; }
 
 /* half-transparent sheets over the home screen */
@@ -613,9 +615,9 @@ button[disabled] { opacity: .45; }
 .sheet-head b { font-size: 18px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sheet-head span { flex: none; margin-left: 10px; color: var(--tx2); font-size: 13px; }
 .picks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-gap: 8px; }
-.pick { display: flex; flex-direction: column; justify-content: center; height: 56px; padding: 0 14px; border-radius: 16px; background: var(--sf3); }
-.pick b { font-size: 15px; font-weight: 600; }
-.pick span { font-size: 12px; opacity: .75; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pick { display: flex; flex-direction: column; justify-content: center; height: 70px; padding: 0 14px; border-radius: 16px; background: var(--sf3); }
+.pick b { font-size: 18px; font-weight: 600; }
+.pick span { margin-top: 2px; font-size: 13px; opacity: .8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pick.span { grid-column: 1 / -1; }
 .pick.on { background: var(--acc); color: #fff; }
 .sheet-row { display: flex; align-items: center; }
@@ -632,22 +634,18 @@ button[disabled] { opacity: .45; }
 .bar-line i { display: block; height: 100%; width: 0; background: var(--acc); transition: width .2s; }
 
 /* main menu */
-.grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(3, minmax(0, 1fr)); grid-gap: 8px; height: 100%; }
+.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 104px; grid-gap: 8px; }
 .tile { position: relative; display: flex; flex-direction: column; justify-content: space-between; min-width: 0; padding: 12px; background: var(--sf); border-radius: 22px; box-shadow: var(--sh); overflow: hidden; }
-.tile .box { width: 42px; height: 42px; }
-.tile b { display: block; font-size: 15px; font-weight: 600; line-height: 1.15; }
-.tile span { display: block; margin-top: 2px; color: var(--tx2); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tile .box { width: 44px; height: 44px; }
+.tile b { display: block; font-size: 18px; font-weight: 600; line-height: 1.15; }
+.tile span { display: block; margin-top: 2px; color: var(--tx2); font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tile .count { position: absolute; top: 12px; right: 12px; min-width: 24px; height: 24px; padding: 0 6px; border-radius: 12px; background: #ef4444; color: #fff; font-size: 13px; font-weight: 600; line-height: 24px; text-align: center; }
 .box { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex: none; border-radius: 14px; background: rgba(var(--acc-rgb), .13); color: var(--acc); }
-.grid.short { height: calc(100% - 64px); }
-.grid.short .tile { padding: 9px 12px; }
-.grid.short .tile .box { width: 36px; height: 36px; border-radius: 12px; }
-.grid.short .tile .box .ic { width: 22px; height: 22px; }
-.leave { display: flex; height: 56px; margin-top: 8px; }
+.leave { display: flex; height: 64px; margin-top: 8px; }
 .leave button { display: flex; align-items: center; justify-content: center; height: 100%; border-radius: 18px; }
 .leave .out { flex: 1 1 0; min-width: 0; padding: 0 14px; background: var(--acc); color: #fff; }
 .leave .out b { margin-left: 8px; font-size: 17px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.leave .set { flex: none; width: 56px; margin-left: 8px; background: var(--sf); box-shadow: var(--sh); }
+.leave .set { flex: none; width: 64px; margin-left: 8px; background: var(--sf); box-shadow: var(--sh); }
 
 /* lists */
 .group { margin-bottom: 8px; background: var(--sf); border-radius: 20px; box-shadow: var(--sh); overflow: hidden; }
@@ -738,7 +736,7 @@ input[type="range"]::-webkit-slider-thumb { width: 36px; height: 36px; margin-to
 
 /* flow */
 .scheme { position: relative; height: 236px; margin-bottom: 8px; background: var(--sf); border-radius: 22px; box-shadow: var(--sh); }
-.scheme svg { position: absolute; top: 12px; left: 8px; width: 448px; height: 212px; }
+.scheme svg { position: absolute; top: 12px; left: 28px; width: calc(100% - 56px); height: 212px; }
 .line-fresh, .line-stale { fill: none; stroke-width: 9; stroke-linecap: round; }
 .line-fresh { stroke: #38bdf8; } .line-stale { stroke: #f97316; }
 .body-unit { fill: var(--sf2); stroke: var(--track); stroke-width: 2; }
@@ -961,10 +959,12 @@ class AlpicAirNestWall extends HTMLElement {
     const app = this.shadowRoot.querySelector(".app");
     if (!app) return;
     if (this._embed) {
-      // the host has already scaled the space it gives
-      app.style.zoom = 1;
-      app.style.width = "100%";
-      app.style.height = "100%";
+      // the host has already scaled its own screen; it says how much of it, in its own pixels
+      const room = this._embed;
+      const zoom = room.width && room.height ? Math.min(room.width, room.height) / BASE : 1;
+      app.style.zoom = zoom;
+      app.style.width = room.width ? `${room.width / zoom}px` : "100%";
+      app.style.height = room.height ? `${room.height / zoom}px` : "100%";
       app.style.marginLeft = "0px";
       return;
     }
@@ -1259,21 +1259,29 @@ class AlpicAirNestWall extends HTMLElement {
           <polygon points="96,172 230,74 364,172" fill="var(--attic)"/>
           <rect x="96" y="166" width="268" height="173" rx="3" fill="var(--wall)" stroke="var(--line)" stroke-width="2"/>
           <path d="M96 172 H364" stroke="var(--line)" stroke-width="2"/>
-          <polygon points="192,114 268,114 284,137 268,160 192,160 176,137" fill="var(--wall)"/>
-          <path d="M282.7 114.7 L276 121 L184 121 L160 141 M296.7 128.1 L284 139 L190 139 L166 161" stroke="#38bdf8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-          <path d="M172 118.6 L182 130 L278 130 L300 152 M160 129.4 L176 148 L284 148 L297.3 160.7" stroke="#f97316" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-          <polygon points="192,114 268,114 284,137 268,160 192,160 176,137" fill="none" stroke="var(--tx)" stroke-width="3" stroke-linejoin="round"/>
+          <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M182 126 C160 118 140 112 118 98 L70 70" stroke="#f97316" stroke-width="16" opacity=".28"/>
+            <path d="M424 58 L346 102 C330 112 300 122 282 130" stroke="#38bdf8" stroke-width="16" opacity=".28"/>
+            <path d="M200 160 C190 172 128 166 128 196 V236" stroke="#38bdf8" stroke-width="16" opacity=".28"/>
+            <path d="M332 250 V196 C332 166 270 172 260 160" stroke="#f97316" stroke-width="16" opacity=".28"/>
+            <path d="M182 126 C160 118 140 112 118 98 L74 72" stroke="#f97316" stroke-width="4"/>
+            <path d="M424 58 L346 102 C330 112 300 122 282 130" stroke="#38bdf8" stroke-width="4"/>
+            <path d="M200 160 C190 172 128 166 128 196 V238" stroke="#38bdf8" stroke-width="4"/>
+            <path d="M332 250 V196 C332 166 270 172 260 160" stroke="#f97316" stroke-width="4"/>
+          </g>
+          <polygon points="192,114 268,114 284,137 268,160 192,160 176,137" fill="var(--wall)" stroke="var(--tx)" stroke-width="3" stroke-linejoin="round"/>
+          <path d="M184 124 H276 M184 137 H276 M184 150 H276" stroke="var(--line)" stroke-width="2"/>
           <path d="M70 180 L230 60 L390 180" stroke="var(--roof)" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-          <path d="M128 118 L78 80 M96.8 81.7 L78 80 L84.7 97.7" stroke="#f97316" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-          <path d="M412 72 L322 114 M340.7 116.3 L322 114 L332.3 98.1" stroke="#38bdf8" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-          <path d="M128 182 V236 M117 224 L128 237 L139 224" stroke="#38bdf8" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-          <path d="M332 237 V183 M321 196 L332 183 L343 196" stroke="#f97316" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          <polygon points="58,63 80,64 69,82" fill="#f97316"/>
+          <polygon points="352,98 373,98 363,81" fill="#38bdf8"/>
+          <polygon points="128,254 116,236 140,236" fill="#38bdf8"/>
+          <polygon points="332,196 320,214 344,214" fill="#f97316"/>
           <path d="M24 339 H436" stroke="var(--ground)" stroke-width="4" stroke-linecap="round"/>
         </svg>
         <div class="clock" id="h-time"></div>
         ${this._embed ? `<button class="tap" data-do="exit" aria-label="${esc(t.exit)}">${icon("back")}</button>` : ""}
         <button class="badge" id="h-faults" data-node="faults" hidden></button>
-        ${label(6, 26, "T_Exhaust")}${label(330, 20, "T_Outdoor")}${label(88, 246, "T_Supply")}${label(292, 246, "T_Extract")}
+        ${label(78, 18, "T_Exhaust")}${label(300, 8, "T_Outdoor")}${label(66, 262, "T_Supply")}${label(310, 262, "T_Extract")}
         <div class="house-mid">
           <button class="house-speed" data-do="sheet" data-sheet="fan" aria-label="${esc(t.fanSpeed)}"><b id="h-speed"></b><small id="h-speed-unit"></small></button>
           <button class="house-mode" data-do="sheet" data-sheet="mode">${icon("power")}<span id="h-mode"></span></button>
@@ -1636,7 +1644,7 @@ class AlpicAirNestWall extends HTMLElement {
         <div class="bar-text"><b>${esc(t.menu)}</b></div>
       </div>
       <div class="body">
-        <div class="grid short">${TREE.map(tile).join("")}</div>
+        <div class="grid">${TREE.map(tile).join("")}</div>
         <div class="leave">
           <button class="out" data-do="exit" aria-label="${esc(t.exit)}">${icon("exit")}<b>${esc(this._embed ? this._embed.leave || t.exit : this._homeName())}</b></button>
           ${this._embed ? "" : `<button class="set" data-do="targets" aria-label="${esc(t.menuButton)}">${icon("sliders")}</button>`}
