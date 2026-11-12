@@ -107,6 +107,10 @@ STORAGE_VERSION: Final = 1
 FAULT_LOG_SIZE: Final = 200
 SERVICE_UNLOCK_SECONDS: Final = 900
 PIN_MAX_TRIES: Final = 5
+# the service PIN lives in Home Assistant, not in the unit: four digits, 4444 until it is changed
+DEFAULT_SERVICE_PIN: Final = "4444"
+PIN_LENGTH: Final = 4
+PIN_ROUNDS: Final = 100_000
 PIN_LOCK_SECONDS: Final = 60
 
 PANEL_URL: Final = "alpicair-nest"

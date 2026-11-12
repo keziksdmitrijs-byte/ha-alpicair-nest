@@ -14,6 +14,8 @@ from custom_components.alpicair_nest.diagnostics import async_get_config_entry_d
 
 from .simulator import TEST_PIN
 
+DEFAULT_PIN = "4444"
+
 
 async def _ask(client, command: str, **fields):
     await client.send_json_auto_id({"type": f"{DOMAIN}/{command}", **fields})
@@ -101,7 +103,8 @@ async def test_unknown_or_hidden_names(admin) -> None:
 async def test_viewer_cannot_touch_adjuster_or_service(viewer, unit) -> None:
     assert (await _ask(viewer, "write", name="Linear_Fan1_Fanspeed_Comfort", value=40))["error"]["code"] == "forbidden"
     assert (await _ask(viewer, "write", name="Fan1_PulsesPerRotation", value=2))["error"]["code"] == "forbidden"
-    assert (await _ask(viewer, "unlock", pin=str(TEST_PIN)))["error"]["code"] == "unauthorized"
+    assert (await _ask(viewer, "unlock", pin=DEFAULT_PIN))["error"]["code"] == "unauthorized"
+    assert (await _ask(viewer, "pin_set", pin="2580"))["error"]["code"] == "unauthorized"
     assert (await _ask(viewer, "write", name="AirTemp_SupplyTarget_Comfort", value=21))["success"]
     assert (await _ask(viewer, "log_clear"))["error"]["code"] == "unauthorized"
 
@@ -113,9 +116,11 @@ async def test_service_needs_the_pin(admin, unit) -> None:
 
     assert (await _ask(admin, "unlock", pin="0"))["error"]["code"] == "wrong_pin"
     assert (await _ask(admin, "unlock", pin="abcd"))["error"]["code"] == "wrong_pin"
-    answer = await _ask(admin, "unlock", pin=str(TEST_PIN))
+    # the PIN kept in the unit opens nothing: the service PIN is Home Assistant's, 4444 until changed
+    assert (await _ask(admin, "unlock", pin=str(TEST_PIN)))["error"]["code"] == "wrong_pin"
+    answer = await _ask(admin, "unlock", pin=DEFAULT_PIN)
     token = answer["result"]["token"]
-    assert str(TEST_PIN) not in json.dumps(answer["result"])
+    assert DEFAULT_PIN not in json.dumps(answer["result"])
 
     assert (await _ask(admin, "write", name="Fan1_PulsesPerRotation", value=4, token="wrong"))["error"][
         "code"
@@ -124,14 +129,37 @@ async def test_service_needs_the_pin(admin, unit) -> None:
     assert unit.holding[address] == 4
 
 
+async def test_pin_is_changed_in_home_assistant(hass, hass_storage, hass_ws_client, admin, unit, loaded) -> None:
+    unit_pin = unit.holding[475]
+    assert (await _ask(admin, "pin_set", pin="2580"))["error"]["code"] == "service_locked"
+    token = (await _ask(admin, "unlock", pin=DEFAULT_PIN))["result"]["token"]
+    assert (await _ask(admin, "pin_set", pin="25", token=token))["error"]["code"] == "invalid_value"
+    assert (await _ask(admin, "pin_set", pin="25a0", token=token))["error"]["code"] == "invalid_value"
+    assert (await _ask(admin, "pin_set", pin="2580", token=token))["success"]
+    assert (await _ask(admin, "unlock", pin=DEFAULT_PIN))["error"]["code"] == "wrong_pin"
+    assert (await _ask(admin, "unlock", pin="2580"))["success"]
+    # the unit keeps its own PIN, and Home Assistant keeps only a digest of the new one
+    assert unit.holding[475] == unit_pin
+    assert 475 not in [address for address, _ in unit.writes]
+    saved = hass_storage[f"{DOMAIN}.{loaded.entry_id}"]["data"]["pin"]
+    assert "2580" not in json.dumps(saved)
+
+    # and it outlasts a restart
+    assert await hass.config_entries.async_reload(loaded.entry_id)
+    await hass.async_block_till_done()
+    client = await hass_ws_client(hass)
+    assert (await _ask(client, "unlock", pin=DEFAULT_PIN))["error"]["code"] == "wrong_pin"
+    assert (await _ask(client, "unlock", pin="2580"))["success"]
+
+
 async def test_too_many_wrong_pins(admin) -> None:
     for _ in range(5):
         assert (await _ask(admin, "unlock", pin="1"))["error"]["code"] == "wrong_pin"
-    assert (await _ask(admin, "unlock", pin=str(TEST_PIN)))["error"]["code"] == "too_many_tries"
+    assert (await _ask(admin, "unlock", pin=DEFAULT_PIN))["error"]["code"] == "too_many_tries"
 
 
 async def test_dangerous_command_needs_confirmation(admin, unit) -> None:
-    token = (await _ask(admin, "unlock", pin=str(TEST_PIN)))["result"]["token"]
+    token = (await _ask(admin, "unlock", pin=DEFAULT_PIN))["result"]["token"]
     answer = await _ask(admin, "write", name="RestartUnit", token=token)
     assert answer["error"]["code"] == "confirm_required"
     assert (await _ask(admin, "write", name="RestartUnit", token=token, confirm=True))["success"]

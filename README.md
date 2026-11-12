@@ -65,7 +65,7 @@
 | Наладчик | администратор | скорости вентиляторов, вытяжка, временные режимы |
 | Сервис | администратор с сервисным PIN | всё остальное |
 
-PIN сверяется с тем, что записан в самой установке, и нигде не хранится. Доступ открывается на 15 минут; после 5 неверных попыток ввод блокируется на минуту. Проверка выполняется на сервере, а не только в панели. Опасные действия дополнительно подтверждаются.
+Сервисный PIN хранится в Home Assistant, а не в установке: по умолчанию **4444**. Сменить его можно в разделе «Сервис» (кнопка «Сменить PIN» на настенной панели, форма над сервисными настройками в боковой панели) — меняется только PIN в Home Assistant, PIN установки не трогается. Хранится не сам PIN, а его солёный хеш. Доступ открывается на 15 минут; после 5 неверных попыток ввод блокируется на минуту. Проверка выполняется на сервере, а не только в панели. Опасные действия дополнительно подтверждаются.
 
 ### Объекты
 
@@ -99,7 +99,7 @@ PIN сверяется с тем, что записан в самой устан
 
 1. **Адресация.** Адреса берутся из таблицы как есть: регистр 1 запрашивается по адресу 1. Используются функции 1, 2, 3, 4, 5, 6 и 16.
 2. **Режим 4 в текущем режиме.** Принято, что `Current system mode = 4` означает буст. Буст включается и выключается катушкой 5, остальные режимы регистром 1.
-3. **Сервисный PIN.** PIN записывается в регистр 199, после чего читается открытый уровень доступа (входной регистр 106). Нужно проверить, что установка открывает уровень именно так и требует ли она пароль наладчика для настроек этого уровня.
+3. **Сервисные настройки.** Сервисный PIN проверяет Home Assistant, в установку (регистр 199) он не вводится. Нужно проверить, принимает ли установка запись сервисных настроек без открытого в ней уровня доступа (входной регистр 106).
 4. **Сохранение настроек.** Неизвестно, сохраняются ли изменения сами или нужна команда «Сохранить настройки в память установки» (катушка 51). Она есть среди кнопок.
 5. **Часы.** Дата и время пишутся в регистры 100–102 и 104–106, затем подаётся команда катушкой 2.
 6. **Давление в каналах.** Множитель зависит от настройки «Множитель давления воздуха»; принято 0,1.
@@ -157,7 +157,7 @@ Language, theme and accent are set under **System → Panel screen**, and follow
 
 ### Access levels
 
-Everyday settings are open to anyone logged in, adjuster settings to administrators, and service settings to administrators who enter the unit's service PIN. The PIN is compared with the one stored in the unit and never kept; access lasts 15 minutes and repeated wrong PINs are locked out. All of this is enforced on the server.
+Everyday settings are open to anyone logged in, adjuster settings to administrators, and service settings to administrators who enter the service PIN. The PIN belongs to Home Assistant, not the unit: it is **4444** until changed under Service (Change PIN on the wall panel, the form above the service settings in the sidebar panel). Changing it changes only Home Assistant's PIN, never the unit's, and only a salted digest of it is kept. Access lasts 15 minutes and repeated wrong PINs are locked out. All of this is enforced on the server.
 
 ### What to check on a real unit
 
@@ -169,7 +169,7 @@ Not yet verified:
 2. A mode is set by writing `ControlMode = Manual`, then `OperatingMode`; the Schedule button writes `Auto`.
 3. The table marks every register as User; the three access levels are this integration's own.
 
-For a NEST nothing is verified on a real unit: that table addresses go on the wire as they are (register 1 at address 1); that current mode 4 is boost, set with coil 5; that the service PIN is entered in holding register 199 and the open access level shows in input register 106; whether settings need the "save to memory" command (coil 51); the clock (registers 100–102 and 104–106, then coil 2). A NEST has no Schedule tab: its ten weekly events and its holidays are plain settings, with the days of the week as a sum (Monday 1 … Sunday 64).
+For a NEST nothing is verified on a real unit: that table addresses go on the wire as they are (register 1 at address 1); that current mode 4 is boost, set with coil 5; whether the unit takes service settings without its own access level opened (the PIN is checked by Home Assistant and no longer entered in holding register 199); whether settings need the "save to memory" command (coil 51); the clock (registers 100–102 and 104–106, then coil 2). A NEST has no Schedule tab: its ten weekly events and its holidays are plain settings, with the days of the week as a sum (Monday 1 … Sunday 64).
 
 Diagnostics (device page → **Download diagnostics**) leave out addresses and the PIN.
 

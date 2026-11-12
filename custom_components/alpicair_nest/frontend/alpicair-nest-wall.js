@@ -104,7 +104,7 @@ const STRINGS = {
     noEvents: "В этот день событий нет", addEvent: "Добавить событие", event: "Событие", time: "Время", temperature: "Температура",
     remove: "Удалить", copyDay: "Скопировать день", copyTo: "Копировать на", copy: "Скопировать", unsaved: "Есть несохранённые изменения",
     schedulerMode: "Как работает расписание", leave: "Выйти без сохранения?", hours: "ч", minutes: "мин",
-    pin: "Сервисный PIN", pinHint: "Сверяется с установкой и нигде не сохраняется", pinWrong: "Неверный PIN", lock: "Закрыть сервис",
+    pin: "Сервисный PIN", pinHint: "Хранится в Home Assistant, по умолчанию 4444", changePin: "Сменить PIN", newPin: "Новый PIN", repeatPin: "Повторите новый PIN", pinFour: "4 цифры", pinMismatch: "PIN не совпадают, введите ещё раз", pinChanged: "PIN изменён", pinWrong: "Неверный PIN", lock: "Закрыть сервис",
     open: (t) => `Открыто ещё ${t}`, needAdmin: "Сервис доступен только администраторам",
     active: "Сейчас", history: "История", words: "Слова состояния", noFaults: "Неисправностей нет", noHistory: "История пуста",
     resetErrors: "Сбросить ошибки", clearHistory: "Очистить историю", clearAsk: "Очистить историю? Она хранится только в Home Assistant.",
@@ -145,7 +145,7 @@ const STRINGS = {
     noEvents: "Šajā dienā notikumu nav", addEvent: "Pievienot notikumu", event: "Notikums", time: "Laiks", temperature: "Temperatūra",
     remove: "Dzēst", copyDay: "Kopēt dienu", copyTo: "Kopēt uz", copy: "Kopēt", unsaved: "Ir nesaglabātas izmaiņas",
     schedulerMode: "Kā darbojas grafiks", leave: "Iziet, nesaglabājot?", hours: "st.", minutes: "min",
-    pin: "Servisa PIN", pinHint: "Tiek salīdzināts ar iekārtu un netiek saglabāts", pinWrong: "Nepareizs PIN", lock: "Aizvērt servisu",
+    pin: "Servisa PIN", pinHint: "Glabājas Home Assistant, pēc noklusējuma 4444", changePin: "Mainīt PIN", newPin: "Jaunais PIN", repeatPin: "Atkārtojiet jauno PIN", pinFour: "4 cipari", pinMismatch: "PIN nesakrīt, ievadiet vēlreiz", pinChanged: "PIN nomainīts", pinWrong: "Nepareizs PIN", lock: "Aizvērt servisu",
     open: (t) => `Atvērts vēl ${t}`, needAdmin: "Serviss pieejams tikai administratoriem",
     active: "Tagad", history: "Vēsture", words: "Statusa vārdi", noFaults: "Bojājumu nav", noHistory: "Vēstures nav",
     resetErrors: "Atiestatīt kļūdas", clearHistory: "Notīrīt vēsturi", clearAsk: "Notīrīt vēsturi? Tā glabājas tikai Home Assistant.",
@@ -186,7 +186,7 @@ const STRINGS = {
     noEvents: "No events on this day", addEvent: "Add event", event: "Event", time: "Time", temperature: "Temperature",
     remove: "Remove", copyDay: "Copy this day", copyTo: "Copy to", copy: "Copy", unsaved: "There are unsaved changes",
     schedulerMode: "How the schedule works", leave: "Leave without saving?", hours: "h", minutes: "min",
-    pin: "Service PIN", pinHint: "Checked against the unit and not stored", pinWrong: "Wrong PIN", lock: "Close service",
+    pin: "Service PIN", pinHint: "Kept in Home Assistant, 4444 by default", changePin: "Change PIN", newPin: "New PIN", repeatPin: "Repeat the new PIN", pinFour: "4 digits", pinMismatch: "The PINs differ, enter it again", pinChanged: "PIN changed", pinWrong: "Wrong PIN", lock: "Close service",
     open: (t) => `Open for ${t}`, needAdmin: "Service is for administrators only",
     active: "Now", history: "History", words: "Status words", noFaults: "No faults", noHistory: "No history yet",
     resetErrors: "Reset errors", clearHistory: "Clear history", clearAsk: "Clear the history? It is kept only in Home Assistant.",
@@ -1826,7 +1826,9 @@ class AlpicAirNestWall extends HTMLElement {
           <div class="row-text"><b>${esc(this._title(kid.id))}</b><span>${esc(this._size(entry))}</span></div>${icon("chevron", "go")}</button>`;
       })
       .join("");
-    const lock = node.id === "service" ? `<button class="wide soft" data-do="lock">${icon("lock")}${esc(t.lock)}</button>` : "";
+    const lock = node.id === "service"
+      ? `<button class="wide soft" data-do="pin-change">${icon("lock")}${esc(t.changePin)}</button><button class="wide soft" data-do="lock">${icon("lock")}${esc(t.lock)}</button>`
+      : "";
     const sub = node.id === "service" ? `<span id="service-left"></span>` : esc(this._crumb(top.id));
     return `<div class="bar"><button class="tap" data-do="back" aria-label="back">${icon("back")}</button>
         <div class="bar-text"><b>${esc(this._title(top.id))}</b><span>${sub}</span></div>
@@ -2297,7 +2299,10 @@ class AlpicAirNestWall extends HTMLElement {
         return `<button data-pin="${key}">${key === "⌫" ? icon("erase") : key}</button>`;
       })
       .join("");
-    return `${this._bar(t.pin, t.pinHint)}
+    // changing the PIN: the new one, then the same once more
+    const title = top.change ? (top.first ? t.repeatPin : t.newPin) : t.pin;
+    const hint = top.change ? t.pinFour : t.pinHint;
+    return `${this._bar(title, hint)}
       <div class="body"><div class="editor"><div class="dots" id="pin-dots">${dots}</div><div class="grow"></div><div class="keys">${keys}</div></div></div>`;
   }
 
@@ -2311,6 +2316,10 @@ class AlpicAirNestWall extends HTMLElement {
     const pin = top.entered;
     top.entered = "";
     this.shadowRoot.querySelectorAll("#pin-dots i").forEach((dot) => dot.classList.remove("on"));
+    if (top.change) {
+      this._pinChange(top, pin);
+      return;
+    }
     try {
       const result = await this._call("unlock", { pin });
       this._token = result.token;
@@ -2320,6 +2329,33 @@ class AlpicAirNestWall extends HTMLElement {
       this._open(then);
     } catch (err) {
       this._toast(this._problem(err));
+    }
+  }
+
+  async _pinChange(top, pin) {
+    const t = this._t;
+    if (pin.length !== 4) {
+      this._toast(t.pinFour);
+      return;
+    }
+    if (!top.first) {
+      top.first = pin;
+      this._draw();
+      return;
+    }
+    const same = top.first === pin;
+    top.first = null;
+    if (!same) {
+      this._toast(t.pinMismatch);
+      this._draw();
+      return;
+    }
+    try {
+      await this._call("pin_set", { pin, token: this._token });
+      this._toast(t.pinChanged);
+      this._back();
+    } catch (err) {
+      this._failed(err);
     }
   }
 
@@ -2576,6 +2612,7 @@ class AlpicAirNestWall extends HTMLElement {
       case "words": this._go("words"); break;
       case "clear-log": this._clearLog(); break;
       case "lock": this._lock(); break;
+      case "pin-change": this._go("pin", { change: true }); break;
       default: break;
     }
   }

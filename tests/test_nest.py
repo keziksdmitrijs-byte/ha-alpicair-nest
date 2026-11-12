@@ -389,16 +389,15 @@ async def test_service_needs_the_pin(admin, nest_unit, nest_loaded) -> None:
     assert (await _ask(admin, "write", name="Heater_Type", value=3))["error"]["code"] == "service_locked"
     assert (await _ask(admin, "unlock", pin="4321"))["error"]["code"] == "wrong_pin"
     assert (await _ask(admin, "unlock", pin="abcd"))["error"]["code"] == "wrong_pin"
-    answer = await _ask(admin, "unlock", pin=str(TEST_PIN))
+    # the unit's own PIN opens nothing: the service PIN is Home Assistant's, 4444 until changed
+    assert (await _ask(admin, "unlock", pin=str(TEST_PIN)))["error"]["code"] == "wrong_pin"
+    answer = await _ask(admin, "unlock", pin="4444")
     token = answer["result"]["token"]
-    assert str(TEST_PIN) not in json.dumps(answer["result"])
+    assert "4444" not in json.dumps(answer["result"])
     assert (await _ask(admin, "write", name="Heater_Type", value=3, token=token))["success"]
     assert unit.holding[address] == 3
-    # the unit still has service access open: a wrong PIN must not ride on that
-    assert unit.input[106] == 2
-    assert (await _ask(admin, "unlock", pin="4321"))["error"]["code"] == "wrong_pin"
-    assert (await _ask(admin, "unlock", pin=str(TEST_PIN)))["success"]
-    # the password is entered, never read or kept
+    # nothing is entered in the unit's password register, and it is never read or kept
+    assert 199 not in [written for written, _ in unit.writes]
     assert 199 not in nest_loaded.runtime_data.data.sp
     diagnostics = json.dumps(await async_get_config_entry_diagnostics(None, nest_loaded))
     assert NEST_SERIAL not in diagnostics
