@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import hmac
 import logging
 import secrets
@@ -26,6 +27,7 @@ from .const import (
     CONTROL_AUTO,
     CONTROL_MANUAL,
     DEFAULT_SCAN_INTERVAL,
+    DEFAULT_SERVICE_PIN,
     DOMAIN,
     DP_IP,
     DP_MAC,
@@ -36,16 +38,14 @@ from .const import (
     MODEL_NEST,
     MODEL_NEST_LS,
     NAME,
-    NEST_ACCESS_SERVICE,
     NEST_COIL_CLOCK_SET,
     NEST_HR_CLOCK_DATE,
     NEST_HR_CLOCK_TIME,
-    NEST_HR_SERVICE_PASSWORD,
-    NEST_IR_ACCESS_LEVEL,
     NEST_IR_UNIT_ID,
     NEST_OPERATING_MODES,
     NEST_TARGET_LIMITS,
     OPERATING_MODES,
+    PIN_ROUNDS,
     SCHEDULE_BASE,
     SCHEDULE_DAYS,
     SCHEDULE_EVENTS,
@@ -54,7 +54,6 @@ from .const import (
     SETPOINT_EVERY,
     SP_FILTER_RUNTIME,
     SP_RUNNING_HOURS,
-    SP_SERVICE_PIN,
     STORAGE_VERSION,
 )
 from .discovery import format_mac, format_serial
@@ -161,6 +160,7 @@ class NestCoordinator(DataUpdateCoordinator[NestData]):
         self._store: Store[dict[str, Any]] = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}")
         self._known_faults: set[str] = set()
         self._loaded = False
+        self._pin: dict[str, str] | None = None
         self._cycle = 0
         self._schedule_due = True
         self._setpoints_due = True
@@ -171,9 +171,7 @@ class NestCoordinator(DataUpdateCoordinator[NestData]):
         self._lock = asyncio.Lock()
 
         # blocks span short gaps, and the gaps hold things that must not be kept, such as the service PIN
-        self._wanted = {
-            store: registers.addresses(store) | self.extra_addresses.get(store, set()) for store in STORES
-        }
+        self._wanted = {store: registers.addresses(store) | self.extra_addresses.get(store, set()) for store in STORES}
         self._blocks = {store: read_blocks(list(addresses)) for store, addresses in self._wanted.items()}
         self._words = [r for r in registers.datapoints.values() if r.fault and r.bits]
         self._flags = [r for r in registers.datapoints.values() if r.fault and not r.bits]
@@ -332,6 +330,7 @@ class NestCoordinator(DataUpdateCoordinator[NestData]):
         if stored:
             self.fault_log = stored.get("log", [])
             self._known_faults = set(stored.get("active", []))
+            self._pin = stored.get("pin")
         self._loaded = True
 
     def _active_faults(self, data: NestData) -> list[dict[str, Any]]:
@@ -384,8 +383,14 @@ class NestCoordinator(DataUpdateCoordinator[NestData]):
         self._known_faults = set(active)
         self._save_store()
 
+    def _stored(self) -> dict[str, Any]:
+        stored: dict[str, Any] = {"log": self.fault_log, "active": sorted(self._known_faults)}
+        if self._pin:
+            stored["pin"] = self._pin
+        return stored
+
     def _save_store(self) -> None:
-        self._store.async_delay_save(lambda: {"log": self.fault_log, "active": sorted(self._known_faults)}, SAVE_DELAY)
+        self._store.async_delay_save(self._stored, SAVE_DELAY)
 
     async def async_clear_log(self) -> None:
         self.fault_log = []
@@ -527,11 +532,24 @@ class NestCoordinator(DataUpdateCoordinator[NestData]):
         if not self.has_schedule:
             raise ValueError("This unit's schedule is among its settings")
 
-    async def async_check_service_pin(self, pin: int) -> bool:
-        """Whether this is the unit's service PIN: it is compared with the one the unit holds, and kept nowhere."""
-        async with self._lock:
-            stored = (await self.client.read_holding(SP_SERVICE_PIN, 1))[0]
-        return hmac.compare_digest(str(pin).encode(), str(stored).encode())
+    # service PIN: kept by Home Assistant as a salted digest, 4444 until it is changed; the unit's own is left alone
+
+    async def async_check_service_pin(self, pin: str) -> bool:
+        if not self._loaded:
+            await self._async_load_store()
+        if not self._pin:
+            return hmac.compare_digest(pin.encode(), DEFAULT_SERVICE_PIN.encode())
+        salt = bytes.fromhex(self._pin["salt"])
+        digest = await self.hass.async_add_executor_job(_pin_digest, pin, salt)
+        return hmac.compare_digest(digest, bytes.fromhex(self._pin["digest"]))
+
+    async def async_set_service_pin(self, pin: str) -> None:
+        if not self._loaded:
+            await self._async_load_store()
+        salt = secrets.token_bytes(16)
+        digest = await self.hass.async_add_executor_job(_pin_digest, pin, salt)
+        self._pin = {"salt": salt.hex(), "digest": digest.hex()}
+        await self._store.async_save(self._stored())
 
 
 class NestMcbCoordinator(NestCoordinator):
@@ -547,12 +565,6 @@ class NestMcbCoordinator(NestCoordinator):
     slow = (STORE_HOLDING, STORE_COIL)
     extra_addresses: ClassVar[dict[str, set[int]]] = {}
     private_addresses: ClassVar[dict[str, set[int]]] = {STORE_INPUT: set(range(NEST_IR_UNIT_ID, NEST_IR_UNIT_ID + 5))}
-
-    def __init__(self, hass: HomeAssistant, entry: ConfigEntry, client: ModbusClient, registers: RegisterMap) -> None:
-        super().__init__(hass, entry, client, registers)
-        # an accepted PIN is remembered as a keyed digest, for as long as Home Assistant runs
-        self._pin_key = secrets.token_bytes(16)
-        self._pin_digest: bytes | None = None
 
     def clock(self) -> dict[str, float | int | None]:
         return {setting: self.value(reading) for setting, reading in NEST_CLOCK.items()}
@@ -597,27 +609,9 @@ class NestMcbCoordinator(NestCoordinator):
             await self.client.write_coil(NEST_COIL_CLOCK_SET, True)
         await self.async_request_refresh()
 
-    async def _access_level(self) -> int:
-        return (await self.client.read_input(NEST_IR_ACCESS_LEVEL, 1))[0]
 
-    async def async_check_service_pin(self, pin: int) -> bool:
-        """The unit checks the PIN itself: it is entered there, and the access level the unit opens tells.
-
-        While the unit still has service access open from before, it tells nothing; then the PIN
-        has to be the one that opened it.
-        """
-        async with self._lock:
-            before = await self._access_level()
-            await self._write(NEST_HR_SERVICE_PASSWORD, pin)
-            after = await self._access_level()
-        digest = hmac.new(self._pin_key, str(pin).encode(), "sha256").digest()
-        if before < NEST_ACCESS_SERVICE or self._pin_digest is None:
-            accepted = after >= NEST_ACCESS_SERVICE
-        else:
-            accepted = hmac.compare_digest(digest, self._pin_digest)
-        if accepted:
-            self._pin_digest = digest
-        return accepted
+def _pin_digest(pin: str, salt: bytes) -> bytes:
+    return hashlib.pbkdf2_hmac("sha256", pin.encode(), salt, PIN_ROUNDS)
 
 
 COORDINATORS: dict[str, type[NestCoordinator]] = {MODEL_NEST_LS: NestCoordinator, MODEL_NEST: NestMcbCoordinator}

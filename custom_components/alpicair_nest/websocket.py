@@ -1,8 +1,9 @@
 """What the panel talks to.
 
 Three levels guard the writes, whatever the panel shows: anyone logged in for everyday settings,
-an administrator for adjuster settings, and an administrator who has given the unit's service PIN for
-service settings. The PIN is compared with the one in the unit; it is neither kept nor sent back.
+an administrator for adjuster settings, and an administrator who has given the service PIN for
+service settings. The PIN belongs to Home Assistant, 4444 until it is changed: only a salted digest of it
+is kept, it is never sent back, and the unit's own PIN is left alone.
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ from .const import (
     CLOCK_REGISTERS,
     DOMAIN,
     MODEL_NAMES,
+    PIN_LENGTH,
     PIN_LOCK_SECONDS,
     PIN_MAX_TRIES,
     SCHEDULE_BASE,
@@ -215,6 +217,7 @@ def async_setup_websocket(hass: HomeAssistant) -> None:
         ws_subscribe,
         ws_write,
         ws_unlock,
+        ws_pin_set,
         ws_control,
         ws_schedule,
         ws_schedule_write,
@@ -337,14 +340,14 @@ async def ws_write(
 async def ws_unlock(
     hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any], coordinator: NestCoordinator
 ) -> None:
-    """Opens service settings for a while against the PIN stored in the unit."""
+    """Opens service settings for a while against the service PIN kept by Home Assistant."""
     access = _access(hass, coordinator.config_entry.entry_id)
     now = time.monotonic()
     if access.locked_until > now:
         connection.send_error(msg["id"], ERR_TOO_MANY, str(int(access.locked_until - now) + 1))
         return
     entered = msg["pin"].strip()
-    if not (entered.isdecimal() and int(entered) <= 0xFFFF and await coordinator.async_check_service_pin(int(entered))):
+    if not (_is_pin(entered) and await coordinator.async_check_service_pin(entered)):
         access.tries += 1
         if access.tries >= PIN_MAX_TRIES:
             access.tries = 0
@@ -355,6 +358,31 @@ async def ws_unlock(
     token = secrets.token_urlsafe(24)
     access.tokens[token] = now + SERVICE_UNLOCK_SECONDS
     connection.send_result(msg["id"], {"token": token, "seconds": SERVICE_UNLOCK_SECONDS})
+
+
+def _is_pin(text: str) -> bool:
+    return len(text) == PIN_LENGTH and text.isascii() and text.isdecimal()
+
+
+@websocket_api.websocket_command(
+    {vol.Required("type"): f"{DOMAIN}/pin_set", ENTRY_ID: str, vol.Required("pin"): str, vol.Optional("token"): str}
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+@_with_coordinator
+async def ws_pin_set(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any], coordinator: NestCoordinator
+) -> None:
+    """Changes the service PIN in Home Assistant, for someone who has opened service access with the old one."""
+    if not _token_valid(hass, coordinator, msg.get("token")):
+        connection.send_error(msg["id"], ERR_LOCKED, "Service is locked")
+        return
+    pin = msg["pin"].strip()
+    if not _is_pin(pin):
+        connection.send_error(msg["id"], ERR_INVALID, f"The PIN is {PIN_LENGTH} digits")
+        return
+    await coordinator.async_set_service_pin(pin)
+    connection.send_result(msg["id"], {})
 
 
 @websocket_api.websocket_command(

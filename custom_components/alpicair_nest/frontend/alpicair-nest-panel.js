@@ -42,8 +42,8 @@ const STRINGS = {
     scheduleOff: "Установка сейчас в ручном режиме, расписание не выполняется.", scheduleOn: "Включить расписание",
     addEvent: "Добавить событие", removeEvent: "Удалить", save: "Сохранить", revert: "Вернуть", noEvents: "На этот день событий нет.",
     copyTo: "Скопировать на", copy: "Скопировать", startsAt: "Начало", mode: "Режим", temperature: "Температура",
-    locked: "Сервисные настройки закрыты", lockedText: "Введите сервисный PIN установки. Он сверяется с установкой и нигде не сохраняется.",
-    pin: "Сервисный PIN", unlock: "Открыть", lock: "Закрыть доступ", unlockedFor: (t) => `Доступ открыт ещё ${t}`,
+    locked: "Сервисные настройки закрыты", lockedText: "Введите сервисный PIN. Он хранится в Home Assistant, по умолчанию 4444.",
+    pin: "Сервисный PIN", changePin: "Сменить PIN", newPin: "Новый PIN", repeatPin: "Ещё раз", pinFour: "PIN — 4 цифры", pinMismatch: "PIN не совпадают", pinChanged: "PIN изменён", unlock: "Открыть", lock: "Закрыть доступ", unlockedFor: (t) => `Доступ открыт ещё ${t}`,
     needAdmin: "Сервисные настройки доступны только администраторам.",
     connection: "Подключение", host: "Адрес", port: "Порт", unitId: "Адрес Modbus", framing: "Протокол",
     mac: "MAC", serial: "Номер установки", model: "Модель", ip: "IP установки", firmware: "Прошивка", bootloader: "Загрузчик", eeprom: "Записей в EEPROM",
@@ -99,8 +99,8 @@ const STRINGS = {
     scheduleOff: "The unit is in manual control, so the schedule is not running.", scheduleOn: "Turn the schedule on",
     addEvent: "Add event", removeEvent: "Remove", save: "Save", revert: "Revert", noEvents: "No events on this day.",
     copyTo: "Copy to", copy: "Copy", startsAt: "Start", mode: "Mode", temperature: "Temperature",
-    locked: "Service settings are locked", lockedText: "Enter the unit's service PIN. It is checked against the unit and not stored.",
-    pin: "Service PIN", unlock: "Unlock", lock: "Lock", unlockedFor: (t) => `Unlocked for ${t}`,
+    locked: "Service settings are locked", lockedText: "Enter the service PIN. It is kept in Home Assistant, 4444 by default.",
+    pin: "Service PIN", changePin: "Change PIN", newPin: "New PIN", repeatPin: "Once more", pinFour: "The PIN is 4 digits", pinMismatch: "The PINs differ", pinChanged: "PIN changed", unlock: "Unlock", lock: "Lock", unlockedFor: (t) => `Unlocked for ${t}`,
     needAdmin: "Service settings are for administrators only.",
     connection: "Connection", host: "Address", port: "Port", unitId: "Modbus unit ID", framing: "Framing",
     mac: "MAC", serial: "Unit ID", model: "Model", ip: "Unit IP", firmware: "Firmware", bootloader: "Bootloader", eeprom: "EEPROM writes",
@@ -157,8 +157,8 @@ STRINGS.lv = {
   scheduleOff: "Iekārta ir manuālā vadībā, grafiks nedarbojas.", scheduleOn: "Ieslēgt grafiku",
   addEvent: "Pievienot notikumu", removeEvent: "Dzēst", save: "Saglabāt", revert: "Atjaunot", noEvents: "Šajā dienā notikumu nav.",
   copyTo: "Kopēt uz", copy: "Kopēt", startsAt: "Sākums", mode: "Režīms", temperature: "Temperatūra",
-  locked: "Servisa iestatījumi ir slēgti", lockedText: "Ievadiet iekārtas servisa PIN. Tas tiek salīdzināts ar iekārtu un netiek saglabāts.",
-  pin: "Servisa PIN", unlock: "Atvērt", lock: "Slēgt", unlockedFor: (t) => `Atvērts vēl ${t}`,
+  locked: "Servisa iestatījumi ir slēgti", lockedText: "Ievadiet servisa PIN. Tas glabājas Home Assistant, pēc noklusējuma 4444.",
+  pin: "Servisa PIN", changePin: "Mainīt PIN", newPin: "Jaunais PIN", repeatPin: "Vēlreiz", pinFour: "PIN ir 4 cipari", pinMismatch: "PIN nesakrīt", pinChanged: "PIN nomainīts", unlock: "Atvērt", lock: "Slēgt", unlockedFor: (t) => `Atvērts vēl ${t}`,
   needAdmin: "Servisa iestatījumi ir pieejami tikai administratoriem.",
   connection: "Savienojums", host: "Adrese", port: "Ports", unitId: "Modbus adrese",
   activeFaults: "Tagad", noFaults: "Bojājumu nav", resetErrors: "Atiestatīt kļūdas", history: "Vēsture",
@@ -362,6 +362,8 @@ input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px s
 .lockbox { max-width: 380px; margin: 32px auto; text-align: center; }
 .lockbox form { display: flex; gap: 8px; margin-top: 14px; }
 .lockbox input { flex: 1; min-width: 0; text-align: center; font-size: 18px; letter-spacing: .2em; }
+.pin-change { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.pin-change input { width: 120px; text-align: center; letter-spacing: .2em; }
 .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px 16px; }
 .facts div span { display: block; color: var(--nest-muted); font-size: 12px; }
 
@@ -1173,7 +1175,10 @@ class AlpicAirNestPanel extends HTMLElement {
     }
     const items = this._schema.setpoints.filter((item) => item.level === "service");
     const order = ["maintenance", "operation", "fans", "fan_hw", "temperature", "temp_sensors", "pressure", "analog_inputs", "digital_inputs", "dampers", "fire", "coils", "recovery", "air_quality", "system", "network", "fieldbus"];
+    const pinInput = (name, label) =>
+      `<input type="password" inputmode="numeric" autocomplete="new-password" maxlength="4" pattern="[0-9]{4}" name="${name}" aria-label="${esc(label)}" placeholder="${esc(label)}" required>`;
     return `<div class="banner info"><span id="unlocked"></span><button class="btn" data-action="lock">${esc(t.lock)}</button></div>
+      <form class="pin-change" data-form="pin">${pinInput("pin", t.newPin)}${pinInput("again", t.repeatPin)}<button class="btn">${esc(t.changePin)}</button></form>
       ${this._browser("service", items, order, (item) => this._settingRow(item, true), { connection: () => this._connectionCard(true) })}`;
   }
 
@@ -1507,8 +1512,35 @@ class AlpicAirNestPanel extends HTMLElement {
     this._refresh();
   }
 
+  async _pinChange(form) {
+    const t = this._t;
+    const pin = form.elements.pin.value.trim();
+    const again = form.elements.again.value.trim();
+    if (!/^[0-9]{4}$/.test(pin)) {
+      this._toast(t.pinFour);
+      return;
+    }
+    if (pin !== again) {
+      this._toast(t.pinMismatch);
+      return;
+    }
+    try {
+      await this._call("pin_set", { pin, token: this._token });
+      form.reset();
+      this._toast(t.pinChanged);
+    } catch (err) {
+      this._toast(this._problem(err));
+      if (err && err.code === "service_locked") this._lock();
+    }
+  }
+
   async _onSubmit(event) {
     const form = event.target;
+    if (form.dataset.form === "pin") {
+      event.preventDefault();
+      this._pinChange(form);
+      return;
+    }
     if (form.dataset.form !== "unlock") return;
     event.preventDefault();
     const pin = form.elements.pin.value;
