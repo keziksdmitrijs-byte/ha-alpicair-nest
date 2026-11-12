@@ -4,7 +4,15 @@
     "step": {
       "user": {
         "title": "AlpicAir NEST",
-        "description": "Kā pievienot iekārtu?",
+        "description": "Kāda iekārta jums ir?",
+        "menu_options": {
+          "nest": "NEST",
+          "nest_ls": "NEST LS"
+        }
+      },
+      "method": {
+        "title": "AlpicAir {model}",
+        "description": "Kā pievienot iekārtu {model}?",
         "menu_options": {
           "manual": "Ievadīt IP adresi",
           "discover": "Atrast automātiski"
@@ -23,12 +31,12 @@
         }
       },
       "confirm": {
-        "title": "Tā neizskatās pēc NEST iekārtas",
-        "description": "{host} atbild uz Modbus pieprasījumiem (adrese {unit}), bet ne tā, kā NEST iekārta. Tomēr pievienot?"
+        "title": "Neizskatās pēc iekārtas {model}",
+        "description": "{host} atbild pa Modbus (adrese {unit}), bet ne tā kā iekārta {model}. Pārbaudiet, vai modelis izvēlēts pareizi. Vai tomēr pievienot?"
       },
       "discovered": {
         "title": "Atrastās iekārtas",
-        "description": "Tīklā atrastas iekārtas: {count}.",
+        "description": "Tīklā atrastas {model} iekārtas: {count}.",
         "data": {
           "device": "Iekārta"
         }
@@ -82,6 +90,7 @@
             "state": {
               "schedule": "Pēc grafika",
               "unoccupied": "Neviena nav",
+              "building_protection": "Ēkas aizsardzība",
               "economy": "Ekonomija",
               "comfort": "Komforts",
               "boost": "Boost",

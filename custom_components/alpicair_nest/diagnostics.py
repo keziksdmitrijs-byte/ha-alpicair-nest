@@ -11,23 +11,26 @@ from homeassistant.core import HomeAssistant
 from . import NestConfigEntry
 from .const import CONF_MAC
 
-TO_REDACT = {CONF_HOST, CONF_MAC, "mac", "ip", "unique_id", "title"}
-# the LAN and Bluetooth addresses among the data points
-PRIVATE_DP = range(316, 344)
+TO_REDACT = {CONF_HOST, CONF_MAC, "mac", "ip", "serial", "unique_id", "title"}
 
 
 async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: NestConfigEntry) -> dict[str, Any]:
     coordinator = entry.runtime_data
     data = coordinator.data
+    # the LAN and Bluetooth addresses and the unit's own number are left out
+    private_dp = coordinator.private_addresses.get("dp", set())
     private_sp = {r.address for r in coordinator.registers.setpoints.values() if r.section == "network"}
     return {
         "entry": async_redact_data({**entry.as_dict()}, TO_REDACT),
+        "model": coordinator.model,
         "framing": coordinator.client.framing,
         "unit": coordinator.client.unit,
         "virtual": async_redact_data(data.virtual, TO_REDACT),
         "faults": data.faults,
         "fault_log": coordinator.fault_log,
-        "datapoints": {a: v for a, v in sorted(data.dp.items()) if a not in PRIVATE_DP},
+        "datapoints": {a: v for a, v in sorted(data.dp.items()) if a not in private_dp},
         "setpoints": {a: v for a, v in sorted(data.sp.items()) if a not in private_sp},
+        "coils": dict(sorted(data.co.items())),
+        "discrete_inputs": dict(sorted(data.di.items())),
         "unreadable": coordinator.unreadable,
     }

@@ -19,6 +19,7 @@ from homeassistant.helpers import selector
 from .const import (
     CONF_FRAMING,
     CONF_MAC,
+    CONF_MODEL,
     CONF_SCAN_INTERVAL,
     CONF_SHOW_PANEL,
     CONF_SHOW_WALL,
@@ -29,7 +30,10 @@ from .const import (
     FRAMING_TCP,
     MAX_SCAN_INTERVAL,
     MIN_SCAN_INTERVAL,
-    NAME,
+    MODEL_NAMES,
+    MODEL_NEST,
+    MODEL_NEST_LS,
+    MODELS,
 )
 from .discovery import FoundUnit, async_discover, async_probe
 
@@ -51,8 +55,8 @@ def _manual_schema(defaults: dict[str, Any]) -> vol.Schema:
     )
 
 
-def _title(host: str) -> str:
-    return f"{NAME} ({host})"
+def _title(host: str, model: str) -> str:
+    return f"AlpicAir {MODEL_NAMES[model]} ({host})"
 
 
 class NestConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -61,6 +65,7 @@ class NestConfigFlow(ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
     def __init__(self) -> None:
+        self._model = MODEL_NEST_LS
         self._found: list[FoundUnit] = []
         self._scan: asyncio.Task[list[FoundUnit]] | None = None
         self._progress_shown = 0.0
@@ -72,8 +77,24 @@ class NestConfigFlow(ConfigFlow, domain=DOMAIN):
         return NestOptionsFlow()
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Which kind of unit: they have different controllers, and different registers."""
+        return self.async_show_menu(step_id="user", menu_options=list(MODELS))
+
+    async def async_step_nest(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        self._model = MODEL_NEST
+        return await self.async_step_method()
+
+    async def async_step_nest_ls(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        self._model = MODEL_NEST_LS
+        return await self.async_step_method()
+
+    async def async_step_method(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Type an address or search for the unit."""
-        return self.async_show_menu(step_id="user", menu_options=["manual", "discover"])
+        return self.async_show_menu(
+            step_id="method",
+            menu_options=["manual", "discover"],
+            description_placeholders={"model": MODEL_NAMES[self._model]},
+        )
 
     async def async_step_manual(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """The address is known."""
@@ -91,11 +112,13 @@ class NestConfigFlow(ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def _async_probe_input(self, user_input: dict[str, Any], errors: dict[str, str]) -> FoundUnit | None:
+    async def _async_probe_input(
+        self, user_input: dict[str, Any], errors: dict[str, str], model: str | None = None
+    ) -> FoundUnit | None:
         host = user_input[CONF_HOST].strip()
         port = int(user_input[CONF_PORT])
         unit_id = user_input.get(CONF_UNIT)
-        found = await async_probe(host, port, None if unit_id is None else int(unit_id))
+        found = await async_probe(host, port, None if unit_id is None else int(unit_id), model or self._model)
         if found is None:
             errors["base"] = "cannot_connect"
         return found
@@ -111,6 +134,7 @@ class NestConfigFlow(ConfigFlow, domain=DOMAIN):
             description_placeholders={
                 "host": self._unconfirmed.host,
                 "unit": str(self._unconfirmed.unit),
+                "model": MODEL_NAMES[self._model],
             },
         )
 
@@ -125,7 +149,7 @@ class NestConfigFlow(ConfigFlow, domain=DOMAIN):
                     self._progress_shown = share
                     self.async_update_progress(share)
 
-            self._scan = self.hass.async_create_task(async_discover(self.hass, DEFAULT_PORT, progress))
+            self._scan = self.hass.async_create_task(async_discover(self.hass, DEFAULT_PORT, progress, self._model))
         if not self._scan.done():
             return self.async_show_progress(
                 step_id="discover",
@@ -151,7 +175,7 @@ class NestConfigFlow(ConfigFlow, domain=DOMAIN):
         options = [
             selector.SelectOptionDict(
                 value=unit.host,
-                label=f"{unit.host}" + (f"  ·  {unit.mac}" if unit.mac else ""),
+                label=f"{unit.host}" + (f"  ·  {unit.mac or unit.serial}" if unit.mac or unit.serial else ""),
             )
             for unit in fresh
         ]
@@ -164,12 +188,16 @@ class NestConfigFlow(ConfigFlow, domain=DOMAIN):
                     )
                 }
             ),
-            description_placeholders={"count": str(len(fresh))},
+            description_placeholders={"count": str(len(fresh)), "model": MODEL_NAMES[self._model]},
         )
 
     async def async_step_nothing_found(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Search again or type the address."""
-        return self.async_show_menu(step_id="nothing_found", menu_options=["discover", "manual"])
+        return self.async_show_menu(
+            step_id="nothing_found",
+            menu_options=["discover", "manual"],
+            description_placeholders={"model": MODEL_NAMES[self._model]},
+        )
 
     async def _async_finish(self, unit: FoundUnit) -> ConfigFlowResult:
         await self.async_set_unique_id(unit.unique_id)
@@ -177,8 +205,9 @@ class NestConfigFlow(ConfigFlow, domain=DOMAIN):
             updates={CONF_HOST: unit.host, CONF_PORT: unit.port, CONF_UNIT: unit.unit, CONF_FRAMING: unit.framing}
         )
         return self.async_create_entry(
-            title=_title(unit.host),
+            title=_title(unit.host, unit.model),
             data={
+                CONF_MODEL: unit.model,
                 CONF_HOST: unit.host,
                 CONF_PORT: unit.port,
                 CONF_UNIT: unit.unit,
@@ -192,16 +221,17 @@ class NestConfigFlow(ConfigFlow, domain=DOMAIN):
         """The unit has a new address."""
         entry = self._get_reconfigure_entry()
         errors: dict[str, str] = {}
+        model = entry.data.get(CONF_MODEL, MODEL_NEST_LS)
         if user_input is not None:
-            unit = await self._async_probe_input(user_input, errors)
+            unit = await self._async_probe_input(user_input, errors, model)
             if unit is not None:
                 await self.async_set_unique_id(unit.unique_id)
-                # an entry that never learned the MAC cannot tell the units apart
-                if entry.data.get(CONF_MAC):
+                # an entry that never learned the MAC or the unit ID cannot tell the units apart
+                if entry.data.get(CONF_MAC) or (unit.serial and entry.unique_id and ":" not in entry.unique_id):
                     self._abort_if_unique_id_mismatch(reason="wrong_device")
                 return self.async_update_reload_and_abort(
                     entry,
-                    title=_title(unit.host),
+                    title=_title(unit.host, model),
                     unique_id=unit.unique_id,
                     data_updates={
                         CONF_HOST: unit.host,

@@ -14,9 +14,14 @@ from custom_components.alpicair_nest.discovery import FoundUnit
 from .conftest import MAC
 
 
-async def _start(hass):
+async def _start(hass, model: str = "nest_ls"):
+    """Chooses the kind of unit; what follows is the same for both."""
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
     assert result["type"] is FlowResultType.MENU
+    assert result["menu_options"] == ["nest", "nest_ls"]
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": model})
+    assert result["type"] is FlowResultType.MENU
+    assert result["step_id"] == "method"
     assert result["menu_options"] == ["manual", "discover"]
     return result
 
@@ -30,6 +35,8 @@ async def test_manual(hass, unit) -> None:
     assert result["result"].unique_id == MAC
     assert result["data"]["unit"] == 1
     assert result["data"]["framing"] == "tcp"
+    assert result["data"]["model"] == "nest_ls"
+    assert result["title"] == "AlpicAir NEST LS (127.0.0.1)"
     await hass.async_block_till_done()
     assert hass.states.get("climate.alpicair_nest") is not None
     await hass.config_entries.async_unload(result["result"].entry_id)

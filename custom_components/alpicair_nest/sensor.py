@@ -35,20 +35,20 @@ MAIN = {
     "AirTemp_PhaseControl_CoolingDemand",
     "Filter_RemainingDays",
     "BoostMode_RemainingTimer_Minutes",
+    "BoostMode_RemainingTimer_Seconds",
+    "SystemState",
 }
 
-# sensors that exist only when an analog input is set up for them: register -> input function
+# sensors that exist only when an input is set up for them: register -> what it measures
 ANALOG = {
-    "AI_ExtractAirHumidity": 1,
-    "AI_ExtractAirCO2": 2,
-    "AI_SupplyAirHumidity": 3,
-    "AI_VOC": 4,
-    "AI_SupplyDuctPressure": 5,
-    "AI_ExtractDuctPressure": 6,
+    "AI_ExtractAirHumidity": "extract_humidity",
+    "AI_ExtractAirCO2": "extract_co2",
+    "AI_SupplyAirHumidity": "supply_humidity",
+    "AI_SupplyAirCO2": "supply_co2",
+    "AI_VOC": "voc",
+    "AI_SupplyDuctPressure": "supply_pressure",
+    "AI_ExtractDuctPressure": "extract_pressure",
 }
-ANALOG_INPUTS = ("AI1_Configuration", "AI2_Configuration", "AI3_Configuration")
-ROTARY = 0
-PLATE = 1
 
 BY_UNIT = {
     "°C": SensorDeviceClass.TEMPERATURE,
@@ -65,35 +65,36 @@ BY_NAME = {
     "AI_ExtractAirHumidity": SensorDeviceClass.HUMIDITY,
     "AI_SupplyAirHumidity": SensorDeviceClass.HUMIDITY,
     "AI_ExtractAirCO2": SensorDeviceClass.CO2,
+    "AI_SupplyAirCO2": SensorDeviceClass.CO2,
     "AI_VOC": SensorDeviceClass.VOLATILE_ORGANIC_COMPOUNDS_PARTS,
 }
 
 
 def _is_main(coordinator: NestCoordinator, name: str) -> bool:
     """The everyday sensors, with the one that fits the installed exchanger."""
-    exchanger = coordinator.value("AirTemp_ERC_TypeInstalled")
+    exchanger = coordinator.data.virtual.get("exchanger")
     if name == "AirTemp_ERC_Rotary_Speed":
-        return exchanger == ROTARY
+        return exchanger == "rotor"
     if name == "AirTemp_ERC_Passive_BypassPosition":
-        return exchanger == PLATE
+        return exchanger == "plate"
     return name in MAIN
 
 
-def _configured_functions(coordinator: NestCoordinator) -> set[int]:
-    return {coordinator.value(name) for name in ANALOG_INPUTS}
+def _measured(coordinator: NestCoordinator) -> list[str]:
+    return coordinator.data.virtual.get("sensors", [])
 
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: NestConfigEntry, async_add_entities: AddConfigEntryEntitiesCallback
 ) -> None:
     coordinator = entry.runtime_data
-    functions = _configured_functions(coordinator)
+    measured = _measured(coordinator)
     entities: list[SensorEntity] = []
     for register in coordinator.registers.datapoints.values():
         if register.hidden or register.flag:
             continue
         if register.name in ANALOG:
-            entities.append(NestAnalogSensor(coordinator, register, ANALOG[register.name] in functions))
+            entities.append(NestAnalogSensor(coordinator, register, ANALOG[register.name] in measured))
         else:
             entities.append(NestSensor(coordinator, register, _is_main(coordinator, register.name)))
     entities += [NestRecovery(coordinator), NestRunningHours(coordinator), NestFaults(coordinator)]
@@ -132,7 +133,7 @@ class NestAnalogSensor(NestSensor):
 
     @property
     def available(self) -> bool:
-        return super().available and ANALOG[self.register.name] in _configured_functions(self.coordinator)
+        return super().available and ANALOG[self.register.name] in _measured(self.coordinator)
 
 
 class NestVirtualSensor(NestEntity, SensorEntity):

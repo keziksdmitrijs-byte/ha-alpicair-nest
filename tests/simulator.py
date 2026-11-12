@@ -1,6 +1,7 @@
 """A pretend unit: speaks Modbus TCP or RTU over TCP on localhost, seeded from the register table.
 
     python -m tests.simulator --port 5020
+    python -m tests.simulator --port 5020 --model nest
 
 Good enough to run Home Assistant against without a real unit. It answers with the table's defaults
 and plausible readings, keeps what is written, and can be told to refuse addresses or functions.
@@ -15,7 +16,8 @@ import json
 import struct
 from pathlib import Path
 
-TABLE = Path(__file__).parent.parent / "custom_components" / "alpicair_nest" / "registers.json"
+FOLDER = Path(__file__).parent.parent / "custom_components" / "alpicair_nest"
+TABLES = {"nest_ls": FOLDER / "registers.json", "nest": FOLDER / "registers_nest.json"}
 TEST_PIN = 1234  # a test value, not any unit's PIN
 
 READINGS = {
@@ -66,26 +68,78 @@ SETTINGS = {
 }
 
 
+# the same for a NEST (MCB controller)
+NEST_READINGS = {
+    "SystemState": 3,
+    "FirmwareVerMain": 127,
+    "Configuration_Version": 312,
+    "Years": 26,
+    "Month": 11,
+    "Day": 12,
+    "Week_Day": 4,
+    "Hours": 8,
+    "Minutes": 38,
+    "Working_Days": 130,
+    "Working_Hours": 5,
+    "CurrentOperatingMode": 3,
+    "Current_Air_Flow": 70,
+    "AirTemp_SupplyControl_PresentSetpoint": 210,
+    "T_Supply": 193,
+    "T_Extract": 214,
+    "T_Exhaust": 62,
+    "T_Outdoor": 28,
+    "AI_ExtractAirHumidity": 420,
+    "AI_ExtractAirCO2": 640,
+    "Filter_RemainingDays": 61,
+    "FirmwareVerBootloader": 12,
+    "Fan1_RPM": 1820,
+    "Fan2_RPM": 1760,
+    "Fan1_Output": 700,
+    "Fan2_Output": 700,
+    "Airflow_Supply": 245,
+    "Airflow_Exhaust": 235,
+    "AirTemp_ERC_Passive_BypassPosition": 0,
+    "Ahu_Id_1": 12,
+    "Ahu_Id_2": 3456,
+    "Ahu_Id_5": 7,
+}
+NEST_SETTINGS = {"OperatingMode": 3, "Air_Quality_Sensor_1": 0, "Air_Quality_Sensor_2": 3}
+NEST_SERVICE_PASSWORD = 199
+NEST_ACCESS_LEVEL = 106
+
+
 class Simulator:
     """One pretend unit."""
 
-    def __init__(self, unit: int = 1, framing: str = "tcp", host: str = "127.0.0.1") -> None:
+    def __init__(self, unit: int = 1, framing: str = "tcp", host: str = "127.0.0.1", model: str = "nest_ls") -> None:
         self.unit = unit
         self.framing = framing
         self.host = host
+        self.model = model
         self.port = 0
         self.holding: dict[int, int] = {}
         self.input: dict[int, int] = {}
+        self.coils: dict[int, int] = {}
+        self.discrete: dict[int, int] = {}
         self.writes: list[tuple[int, int]] = []
+        self.coil_writes: list[tuple[int, int]] = []
         self.refused_input: set[int] = set()
         self.no_single_write = False
+        self.no_multiple_write = False
         self._server: asyncio.Server | None = None
         self._tasks: set[asyncio.Task] = set()
-        table = json.loads(TABLE.read_text(encoding="utf-8"))
+        table = json.loads(TABLES[model].read_text(encoding="utf-8"))
         self.addresses = {r["n"]: r["a"] for r in table["sp"]}
         self.addresses_dp = {r["n"]: r["a"] for r in table["dp"]}
         for register in table["sp"]:
-            self.holding[register["a"]] = round(register["def"] * 10 ** register["d"]) & 0xFFFF
+            store = self.coils if register.get("tb") == "c" else self.holding
+            store[register["a"]] = round(register["def"] * 10 ** register["d"]) & 0xFFFF
+        if model == "nest":
+            for name, value in NEST_SETTINGS.items():
+                self.holding[self.addresses[name]] = value
+            for name, value in NEST_READINGS.items():
+                self.input[self.addresses_dp[name]] = value
+            return
         self.holding[475] = TEST_PIN
         self.holding[563] = 1
         self.holding[566] = 502
@@ -160,6 +214,18 @@ class Simulator:
         if unit != self.unit:
             return None
         function = pdu[0]
+        if function in (1, 2):
+            address, count = struct.unpack(">HH", pdu[1:5])
+            table = self.coils if function == 1 else self.discrete
+            packed = bytearray((count + 7) // 8)
+            for index in range(count):
+                if table.get(address + index):
+                    packed[index // 8] |= 1 << (index % 8)
+            return bytes([function, len(packed)]) + bytes(packed)
+        if function == 5:
+            address, value = struct.unpack(">HH", pdu[1:5])
+            self._store_coil(address, 1 if value else 0)
+            return pdu[:5]
         if function in (3, 4):
             address, count = struct.unpack(">HH", pdu[1:5])
             table = self.holding if function == 3 else self.input
@@ -175,6 +241,8 @@ class Simulator:
             self._store(address, value)
             return pdu[:5]
         if function == 16:
+            if self.no_multiple_write:
+                return bytes([function | 0x80, 1])
             address, count = struct.unpack(">HH", pdu[1:5])
             words = struct.unpack(f">{count}H", pdu[6 : 6 + count * 2])
             for offset, value in enumerate(words):
@@ -182,9 +250,37 @@ class Simulator:
             return pdu[:5]
         return bytes([function | 0x80, 1])
 
+    def _store_coil(self, address: int, value: int) -> None:
+        """A NEST's commands."""
+        self.coil_writes.append((address, value))
+        self.coils[address] = value
+        mode, state = self.addresses_dp["CurrentOperatingMode"], self.addresses_dp["SystemState"]
+        if address == self.addresses["BoostMode_Active"]:
+            chosen = self.holding[self.addresses["OperatingMode"]]
+            self.input[mode], self.input[state] = (4, 7) if value else (chosen, chosen)
+        elif address == self.addresses["Filter_Reset"] and value:
+            period = self.holding[self.addresses["Filter_TimerPeriod_Days"]]
+            self.input[self.addresses_dp["Filter_RemainingDays"]] = period
+            self.coils[address] = 0
+        elif address == 2 and value:
+            # the clock takes the date and time that were written for it
+            self.input.update({4: self.holding.get(100, 0), 5: self.holding.get(101, 0), 6: self.holding.get(102, 0)})
+            self.input.update({8: self.holding.get(104, 0), 9: self.holding.get(105, 0), 10: self.holding.get(106, 0)})
+            self.coils[address] = 0
+
     def _store(self, address: int, value: int) -> None:
         self.writes.append((address, value))
         self.holding[address] = value
+        if self.model == "nest":
+            if address == NEST_SERVICE_PASSWORD:
+                # the unit takes the password and shows what it opened; a wrong one changes nothing
+                self.holding[address] = 0
+                if value == TEST_PIN:
+                    self.input[NEST_ACCESS_LEVEL] = 2
+            elif address == self.addresses["OperatingMode"] and not self.coils.get(self.addresses["BoostMode_Active"]):
+                self.input[self.addresses_dp["CurrentOperatingMode"]] = value
+                self.input[self.addresses_dp["SystemState"]] = value
+            return
         if address == self.addresses.get("OperatingMode"):
             self.input[self.addresses_dp["CurrentOperatingMode"]] = value
         if address == self.addresses.get("Filter_Reset"):
@@ -203,15 +299,17 @@ def _crc(data: bytes) -> int:
     return crc
 
 
-async def _main(port: int, faults: bool) -> None:
-    simulator = Simulator(host="0.0.0.0")
-    if faults:
+async def _main(port: int, faults: bool, model: str) -> None:
+    simulator = Simulator(host="0.0.0.0", model=model)
+    if faults and model == "nest":
+        simulator.discrete.update({14: 1, 38: 1, 188: 1, 189: 1})
+    elif faults:
         simulator.input[simulator.addresses_dp["ErrorStatus1"]] = 1 << 0
         simulator.input[simulator.addresses_dp["WarningStatus2"]] = 1 << 13
         simulator.input[simulator.addresses_dp["AnyErrorActive"]] = 1
         simulator.input[simulator.addresses_dp["AnyWarningActive"]] = 1
     await simulator.start(port)
-    print(f"Simulated unit on port {simulator.port}, unit id {simulator.unit}")
+    print(f"Simulated {model} unit on port {simulator.port}, unit id {simulator.unit}")
     await asyncio.Event().wait()
 
 
@@ -219,6 +317,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", type=int, default=5020)
     parser.add_argument("--faults", action="store_true", help="start with a fault and a warning active")
+    parser.add_argument("--model", choices=sorted(TABLES), default="nest_ls", help="the kind of unit to pretend to be")
     args = parser.parse_args()
     with contextlib.suppress(KeyboardInterrupt):
-        asyncio.run(_main(args.port, args.faults))
+        asyncio.run(_main(args.port, args.faults, args.model))

@@ -15,6 +15,10 @@ def language(hass: HomeAssistant) -> str:
     return hass.config.language.split("-")[0]
 
 
+# a NEST keeps its schedules as a hundred plain settings: those are for the panel
+PANEL_ONLY_SECTIONS = {"week_schedule", "holidays"}
+
+
 def exposed_setpoints(coordinator: NestCoordinator, entity: str) -> list[Register]:
     """Setpoints offered as entities: everyday ones. Service settings live in the panel only."""
     return [
@@ -22,6 +26,7 @@ def exposed_setpoints(coordinator: NestCoordinator, entity: str) -> list[Registe
         for register in coordinator.registers.setpoints.values()
         if register.entity == entity
         and register.level != "service"
+        and register.section not in PANEL_ONLY_SECTIONS
         and not register.danger
         and not register.read_only
         and register.name not in CLOCK_REGISTERS

@@ -4,7 +4,15 @@
     "step": {
       "user": {
         "title": "AlpicAir NEST",
-        "description": "How do you want to add the unit?",
+        "description": "Which unit do you have?",
+        "menu_options": {
+          "nest": "NEST",
+          "nest_ls": "NEST LS"
+        }
+      },
+      "method": {
+        "title": "AlpicAir {model}",
+        "description": "How would you like to add the {model} unit?",
         "menu_options": {
           "manual": "Enter the IP address",
           "discover": "Find it automatically"
@@ -23,12 +31,12 @@
         }
       },
       "confirm": {
-        "title": "This does not look like a NEST unit",
-        "description": "{host} answers Modbus requests (unit ID {unit}), but not the way a NEST unit does. Add it anyway?"
+        "title": "Does not look like a {model} unit",
+        "description": "{host} answers on Modbus (unit ID {unit}), but not the way a {model} unit does. Check that you chose the right kind of unit. Add it anyway?"
       },
       "discovered": {
         "title": "Units found",
-        "description": "Units found on the network: {count}.",
+        "description": "{model} units found on the network: {count}.",
         "data": {
           "device": "Unit"
         }
@@ -82,6 +90,7 @@
             "state": {
               "schedule": "Schedule",
               "unoccupied": "Unoccupied",
+              "building_protection": "Building protection",
               "economy": "Economy",
               "comfort": "Comfort",
               "boost": "Boost",

@@ -4,9 +4,11 @@
 
 ## Русский
 
-Интеграция для рекуператоров **AlpicAir NEST** с контроллером ES1125. Подключается по Modbus TCP напрямую, без облака. Панель настроек, данных, расписания, сервиса и ошибок встроена в интеграцию и появляется в боковом меню Home Assistant.
+Интеграция для рекуператоров **AlpicAir NEST** (контроллер MCB) и **AlpicAir NEST LS** (контроллер ES1125). Модель выбирается при добавлении. Подключается по Modbus TCP напрямую, без облака. Панель настроек, данных, расписания, сервиса и ошибок встроена в интеграцию и появляется в боковом меню Home Assistant.
 
-> **Статус: чтение проверено на настоящей установке** (прошивка 49012, таблица регистров 48012): поиск в сети, все показания и настройки. Управление режимами на настоящей установке ещё не проверялось, см. раздел [«Что проверить на установке»](#что-проверить-на-установке). Сервисные настройки меняйте осторожно.
+> **Статус NEST LS: чтение проверено на настоящей установке** (прошивка 49012, таблица регистров 48012): поиск в сети, все показания и настройки. Управление режимами на настоящей установке ещё не проверялось, см. раздел [«Что проверить на установке»](#что-проверить-на-установке). Сервисные настройки меняйте осторожно.
+
+> **Статус NEST: на настоящей установке не проверялось.** Поддержка сделана по таблице Modbus MCB 1.27 и проверена только на симуляторе, см. там же.
 
 ### Установка
 
@@ -18,7 +20,7 @@
 
 ### Подключение
 
-**Настройки → Устройства и службы → Добавить интеграцию → AlpicAir NEST**, затем на выбор:
+**Настройки → Устройства и службы → Добавить интеграцию → AlpicAir NEST**. Сначала выберите модель: **NEST** или **NEST LS**. У них разные контроллеры и разные таблицы регистров, поэтому установка другой модели не опознаётся. Установки, добавленные до появления выбора, считаются NEST LS. Затем на выбор:
 
 - **Ввести IP-адрес**: адрес, порт и, если нужно, адрес Modbus. Пустое поле означает автоматический подбор.
 - **Найти автоматически**: поиск по локальным сетям Home Assistant. Установка опознаётся по своим регистрам, поиск только читает.
@@ -91,6 +93,20 @@ PIN сверяется с тем, что записан в самой устан
 
 Установка повторяет ошибки и предупреждения в словах Alarm, поэтому одна неисправность показывается одной строкой. Без датчиков давления расход равен нулю, и панель показывает выход вентиляторов в процентах.
 
+#### NEST (контроллер MCB)
+
+На настоящей установке не проверено ничего. В первую очередь:
+
+1. **Адресация.** Адреса берутся из таблицы как есть: регистр 1 запрашивается по адресу 1. Используются функции 1, 2, 3, 4, 5, 6 и 16.
+2. **Режим 4 в текущем режиме.** Принято, что `Current system mode = 4` означает буст. Буст включается и выключается катушкой 5, остальные режимы регистром 1.
+3. **Сервисный PIN.** PIN записывается в регистр 199, после чего читается открытый уровень доступа (входной регистр 106). Нужно проверить, что установка открывает уровень именно так и требует ли она пароль наладчика для настроек этого уровня.
+4. **Сохранение настроек.** Неизвестно, сохраняются ли изменения сами или нужна команда «Сохранить настройки в память установки» (катушка 51). Она есть среди кнопок.
+5. **Часы.** Дата и время пишутся в регистры 100–102 и 104–106, затем подаётся команда катушкой 2.
+6. **Давление в каналах.** Множитель зависит от настройки «Множитель давления воздуха»; принято 0,1.
+7. **Датчики влажности и CO₂.** Плитки появляются, если датчик задан в настройках или от него приходит ненулевое значение.
+
+Недельное расписание и отпуск у NEST устроены иначе, чем у NEST LS (10 событий с днями недели), поэтому вкладки «Расписание» у него нет: события настраиваются в **Настройки → Недельное расписание** и **Отпуск**. Дни недели задаются суммой: понедельник 1, вторник 2, среда 4, четверг 8, пятница 16, суббота 32, воскресенье 64. Режима «По расписанию» и режима кухонной вытяжки у NEST нет. Сетевого адреса у контроллера MCB нет, поэтому установка опознаётся по своему номеру (ID), а если он не задан, по адресу подключения.
+
 Если что-то не сходится, приложите диагностику: страница устройства → **Скачать диагностику**. Адреса и PIN в неё не попадают.
 
 ### Разработка
@@ -101,15 +117,21 @@ pytest
 
 # симулятор установки на порту 5020
 python -m tests.simulator --port 5020 --faults
+# то же для NEST
+python -m tests.simulator --port 5021 --model nest --faults
 ```
 
-`custom_components/alpicair_nest/registers.json` создаётся из таблицы производителя командой `scripts/build_registers.py <файл.xlsm>`. Сама таблица в репозитории не хранится. Ключи Bluetooth и Nabto, PIN-коды, заводские записи и принудительное управление выходами скрипт отбрасывает.
+`custom_components/alpicair_nest/registers_nest.json` (NEST) создаётся командой `scripts/build_registers_nest.py <таблица.xlsx>`, названия на трёх языках лежат в `scripts/labels_nest.py`. Пароли, заводские функции, принудительное управление выходами, карта входов и выходов и регистры для записи показаний из BMS в карту не попадают.
+
+`custom_components/alpicair_nest/registers.json` (NEST LS) создаётся из таблицы производителя командой `scripts/build_registers.py <файл.xlsm>`. Сама таблица в репозитории не хранится. Ключи Bluetooth и Nabto, PIN-коды, заводские записи и принудительное управление выходами скрипт отбрасывает.
 
 ## English
 
-Local Modbus TCP integration for **AlpicAir NEST** heat-recovery units with the ES1125 controller, with a built-in sidebar panel for settings, schedule, data, service and faults. No cloud.
+Local Modbus TCP integration for **AlpicAir NEST** (MCB controller) and **AlpicAir NEST LS** (ES1125 controller) heat-recovery units; the model is chosen when the unit is added. It comes with a built-in sidebar panel for settings, schedule, data, service and faults. No cloud.
 
-> **Status: reading is verified on a real unit** (firmware 49012, register table 48012): network search, all readings and settings. Mode control has not been tried on a real unit yet, see [What to check on a real unit](#what-to-check-on-a-real-unit).
+> **NEST status: not tried on a real unit.** It is built from the MCB 1.27 Modbus table and tested against a simulator only.
+>
+> **NEST LS status: reading is verified on a real unit** (firmware 49012, register table 48012): network search, all readings and settings. Mode control has not been tried on a real unit yet, see [What to check on a real unit](#what-to-check-on-a-real-unit).
 
 ### Install
 
@@ -119,7 +141,7 @@ Modbus TCP must be enabled on the unit (port 502 by default).
 
 ### Set up
 
-**Settings → Devices & services → Add integration → AlpicAir NEST**, then either enter the IP address or let it search the local networks. The search only reads, and recognises a unit by its registers.
+**Settings → Devices & services → Add integration → AlpicAir NEST**, choose **NEST** or **NEST LS** (units added before the choice existed are NEST LS), then either enter the IP address or let it search the local networks. The search only reads, and recognises a unit by its registers.
 
 ### Square wall panels
 
@@ -147,6 +169,8 @@ Not yet verified:
 2. A mode is set by writing `ControlMode = Manual`, then `OperatingMode`; the Schedule button writes `Auto`.
 3. The table marks every register as User; the three access levels are this integration's own.
 
+For a NEST nothing is verified on a real unit: that table addresses go on the wire as they are (register 1 at address 1); that current mode 4 is boost, set with coil 5; that the service PIN is entered in holding register 199 and the open access level shows in input register 106; whether settings need the "save to memory" command (coil 51); the clock (registers 100–102 and 104–106, then coil 2). A NEST has no Schedule tab: its ten weekly events and its holidays are plain settings, with the days of the week as a sum (Monday 1 … Sunday 64).
+
 Diagnostics (device page → **Download diagnostics**) leave out addresses and the PIN.
 
 ### Development
@@ -157,7 +181,7 @@ pytest
 python -m tests.simulator --port 5020 --faults
 ```
 
-`registers.json` is generated with `scripts/build_registers.py <workbook.xlsm>`. The workbook is not in the repository, and the script leaves out Bluetooth and Nabto keys, PIN codes, factory records and output overrides.
+`registers_nest.json` (NEST) is generated with `scripts/build_registers_nest.py <table.xlsx>`; `python -m tests.simulator --model nest` pretends to be one. `registers.json` (NEST LS) is generated with `scripts/build_registers.py <workbook.xlsm>`. The workbook is not in the repository, and the script leaves out Bluetooth and Nabto keys, PIN codes, factory records and output overrides.
 
 ## License
 

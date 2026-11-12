@@ -18,6 +18,7 @@ MAIN = PROBLEMS | {
     "AirTemp_ERC_Deicing_HeatExchangerActive",
     "AirQ_CO2_ControlActiveOrNot",
     "AirQ_Humidity_ControlActiveOrNot",
+    "Status_Heating_Season",
 }
 
 

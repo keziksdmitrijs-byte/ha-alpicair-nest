@@ -7,8 +7,15 @@ from typing import Final
 DOMAIN: Final = "alpicair_nest"
 NAME: Final = "AlpicAir NEST"
 MANUFACTURER: Final = "AlpicAir"
-MODEL: Final = "NEST"
 
+# the two kinds of unit: NEST LS has the ES1125 controller, NEST the MCB controller
+MODEL_NEST: Final = "nest"
+MODEL_NEST_LS: Final = "nest_ls"
+MODELS: Final = (MODEL_NEST, MODEL_NEST_LS)
+MODEL_NAMES: Final = {MODEL_NEST: "NEST", MODEL_NEST_LS: "NEST LS"}
+REGISTER_FILES: Final = {MODEL_NEST: "registers_nest.json", MODEL_NEST_LS: "registers.json"}
+
+CONF_MODEL: Final = "model"
 CONF_UNIT: Final = "unit"
 CONF_FRAMING: Final = "framing"
 CONF_MAC: Final = "mac"
@@ -55,6 +62,22 @@ DP_MAC: Final = 316
 DP_IP: Final = 328
 
 OPERATING_MODES: Final = ("standby", "unoccupied", "economy", "comfort", "boost", "kitchen_hood")
+BOOST: Final = 4
+
+# NEST (MCB controller): what its table does not say by name
+NEST_OPERATING_MODES: Final = ("standby", "building_protection", "economy", "comfort", "boost")
+NEST_TARGET_LIMITS: Final = (16.0, 30.0)
+NEST_HR_MODE: Final = 1
+NEST_HR_CLOCK_DATE: Final = 100  # year, month, day
+NEST_HR_CLOCK_TIME: Final = 104  # hour, minute, second
+NEST_HR_SERVICE_PASSWORD: Final = 199
+NEST_HR_SERIAL_PORT: Final = 672  # address, baud rate, frame
+NEST_COIL_CLOCK_SET: Final = 2
+NEST_IR_STATE: Final = 1  # state, software version, configuration version
+NEST_IR_ACCESS_LEVEL: Final = 106
+NEST_IR_UNIT_ID: Final = 107  # five registers
+NEST_ACCESS_SERVICE: Final = 2
+NEST_LAST_STATE: Final = 63
 MODE_NAMES: Final = {
     "en": ("Standby", "Unoccupied", "Economy", "Comfort", "Boost", "Kitchen hood"),
     "ru": ("Ожидание", "Никого нет", "Эконом", "Комфорт", "Буст", "Кухонная вытяжка"),

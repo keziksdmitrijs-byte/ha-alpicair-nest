@@ -1,6 +1,6 @@
 """A small Modbus client on asyncio, for Modbus TCP and for RTU frames over TCP.
 
-Only what the unit needs: holding and input registers, one write of each kind. It has no outside
+Only what the units need: registers and single bits, read in blocks and written one by one. It has no outside
 dependency, so it cannot clash with the pymodbus version Home Assistant's own modbus integration pins.
 """
 
@@ -14,13 +14,19 @@ from .const import DEFAULT_PORT, FRAMING_RTU, FRAMING_TCP
 
 _LOGGER = logging.getLogger(__name__)
 
+READ_COILS = 1
+READ_DISCRETE = 2
 READ_HOLDING = 3
 READ_INPUT = 4
+WRITE_COIL = 5
 WRITE_SINGLE = 6
 WRITE_MULTIPLE = 16
+READS = (READ_COILS, READ_DISCRETE, READ_HOLDING, READ_INPUT)
 
 MAX_READ = 125
+MAX_READ_BITS = 2000
 MAX_WRITE = 123
+COIL_ON = 0xFF00
 
 
 class ModbusError(Exception):
@@ -104,6 +110,16 @@ class ModbusClient:
     async def read_input(self, address: int, count: int) -> list[int]:
         return await self._read(READ_INPUT, address, count)
 
+    async def read_coils(self, address: int, count: int) -> list[int]:
+        return await self._read_bits(READ_COILS, address, count)
+
+    async def read_discrete(self, address: int, count: int) -> list[int]:
+        return await self._read_bits(READ_DISCRETE, address, count)
+
+    async def write_coil(self, address: int, on: bool) -> None:
+        """Write one coil."""
+        await self._request(struct.pack(">BHH", WRITE_COIL, address, COIL_ON if on else 0))
+
     async def write_register(self, address: int, value: int) -> None:
         """Write one register."""
         await self._request(struct.pack(">BHH", WRITE_SINGLE, address, value & 0xFFFF))
@@ -123,6 +139,15 @@ class ModbusClient:
         if len(answer) < 2 or answer[1] != count * 2 or len(answer) < 2 + count * 2:
             raise ModbusError(f"Short answer to read of {count} registers at {address}")
         return list(struct.unpack(f">{count}H", answer[2 : 2 + count * 2]))
+
+    async def _read_bits(self, function: int, address: int, count: int) -> list[int]:
+        if not 1 <= count <= MAX_READ_BITS:
+            raise ValueError("A read holds 1 to 2000 bits")
+        answer = await self._request(struct.pack(">BHH", function, address, count))
+        size = (count + 7) // 8
+        if len(answer) < 2 or answer[1] != size or len(answer) < 2 + size:
+            raise ModbusError(f"Short answer to read of {count} bits at {address}")
+        return [(answer[2 + index // 8] >> (index % 8)) & 1 for index in range(count)]
 
     async def _request(self, pdu: bytes) -> bytes:
         """Send one PDU and return the answer's PDU; a broken connection is retried once."""
@@ -164,7 +189,7 @@ class ModbusClient:
         function = head[1]
         if function & 0x80:
             rest = await self._reader.readexactly(3)
-        elif function in (READ_HOLDING, READ_INPUT):
+        elif function in READS:
             size = await self._reader.readexactly(1)
             rest = size + await self._reader.readexactly(size[0] + 2)
         else:
