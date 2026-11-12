@@ -17,11 +17,13 @@ from homeassistant.loader import async_get_integration
 from .client import ModbusClient, ModbusError
 from .const import (
     CONF_FRAMING,
+    CONF_MODEL,
     CONF_SHOW_PANEL,
     CONF_SHOW_WALL,
     CONF_UNIT,
     DOMAIN,
     FRAMING_TCP,
+    MODEL_NEST_LS,
     NAME,
     PANEL_ELEMENT,
     PANEL_ICON,
@@ -32,7 +34,7 @@ from .const import (
     WALL_TITLE,
     WALL_URL,
 )
-from .coordinator import NestCoordinator
+from .coordinator import NestCoordinator, coordinator_class
 from .registers import async_load_registers
 from .websocket import async_setup_websocket
 
@@ -70,7 +72,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: NestConfigEntry) -> bool
     except ModbusError as err:
         raise ConfigEntryNotReady(str(err)) from err
 
-    coordinator = NestCoordinator(hass, entry, client, await async_load_registers(hass))
+    model = entry.data.get(CONF_MODEL, MODEL_NEST_LS)
+    coordinator = coordinator_class(entry)(hass, entry, client, await async_load_registers(hass, model))
     try:
         await coordinator.async_config_entry_first_refresh()
     except ConfigEntryNotReady:

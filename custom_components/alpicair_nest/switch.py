@@ -12,7 +12,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from . import NestConfigEntry
 from .entity import NestRegisterEntity, exposed_setpoints
 
-MAIN = {"FreeCooling_Enable"}
+MAIN = {"FreeCooling_Enable", "BoostMode_Active"}
 
 
 async def async_setup_entry(

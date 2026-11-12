@@ -20,6 +20,13 @@ from .const import (
     DP_MAC,
     FRAMING_RTU,
     FRAMING_TCP,
+    MODEL_NEST,
+    MODEL_NEST_LS,
+    NEST_HR_MODE,
+    NEST_HR_SERIAL_PORT,
+    NEST_IR_STATE,
+    NEST_IR_UNIT_ID,
+    NEST_LAST_STATE,
     SP_MODBUS_ENABLED,
     SP_MODBUS_PORT,
     SP_RTU_ADDRESS,
@@ -48,10 +55,12 @@ class FoundUnit:
     mac: str | None
     firmware: int | None
     matched: bool
+    model: str = MODEL_NEST_LS
+    serial: str | None = None
 
     @property
     def unique_id(self) -> str:
-        return self.mac or f"{self.host}:{self.port}"
+        return self.mac or self.serial or f"{self.host}:{self.port}"
 
 
 def format_mac(words: list[int]) -> str | None:
@@ -59,6 +68,28 @@ def format_mac(words: list[int]) -> str | None:
     if len(words) != 6 or not any(words) or any(w > 255 for w in words):
         return None
     return ":".join(f"{w:02x}" for w in words)
+
+
+def format_serial(words: list[int]) -> str | None:
+    """The five registers of a NEST's unit ID as one number; None while none is set."""
+    if len(words) != 5 or not any(words) or any(w > 9999 for w in words):
+        return None
+    return "-".join(f"{w:04d}" for w in words)
+
+
+async def _read_signature_nest(client: ModbusClient, host: str, port: int) -> FoundUnit | None:
+    """A NEST by what its MCB controller keeps where: state and versions, mode, serial port settings."""
+    state, firmware, _configuration = await client.read_input(NEST_IR_STATE, 3)
+    mode = (await client.read_holding(NEST_HR_MODE, 1))[0]
+    address, baud, frame = await client.read_holding(NEST_HR_SERIAL_PORT, 3)
+    port_plausible = 1 <= address <= 247 and baud <= 7 and frame <= 5
+    matched = state <= NEST_LAST_STATE and firmware > 0 and mode <= 3 and port_plausible
+    serial = None
+    try:
+        serial = format_serial(await client.read_input(NEST_IR_UNIT_ID, 5))
+    except ModbusError as err:
+        _LOGGER.debug("%s: no unit ID: %s", host, err)
+    return FoundUnit(host, port, client.unit, client.framing, None, firmware, matched, MODEL_NEST, serial)
 
 
 async def _read_signature(client: ModbusClient, host: str, port: int) -> FoundUnit | None:
@@ -87,18 +118,24 @@ async def _read_signature(client: ModbusClient, host: str, port: int) -> FoundUn
     return FoundUnit(host, port, client.unit, client.framing, mac, firmware, matched)
 
 
-async def async_probe(host: str, port: int = DEFAULT_PORT, unit: int | None = None) -> FoundUnit | None:
+SIGNATURES = {MODEL_NEST_LS: _read_signature, MODEL_NEST: _read_signature_nest}
+
+
+async def async_probe(
+    host: str, port: int = DEFAULT_PORT, unit: int | None = None, model: str = MODEL_NEST_LS
+) -> FoundUnit | None:
     """Tries the unit ids and framings; the best answer, None when nothing answers.
 
     Raises nothing: a host that does not speak Modbus simply gives None.
     """
+    read_signature = SIGNATURES[model]
     best: FoundUnit | None = None
     units = (unit,) if unit is not None else UNIT_IDS
     for framing in (FRAMING_TCP, FRAMING_RTU):
         for candidate in units:
             client = ModbusClient(host, port, candidate, framing, timeout=PROBE_TIMEOUT)
             try:
-                found = await _read_signature(client, host, port)
+                found = await read_signature(client, host, port)
             except ModbusError as err:
                 _LOGGER.debug("%s unit %s %s: %s", host, candidate, framing, err)
                 found = None
@@ -143,8 +180,9 @@ async def async_discover(
     hass: HomeAssistant,
     port: int = DEFAULT_PORT,
     progress: Callable[[float], None] | None = None,
+    model: str = MODEL_NEST_LS,
 ) -> list[FoundUnit]:
-    """All units on the local networks, nearest address first."""
+    """All units of one kind on the local networks, nearest address first."""
     hosts = await async_local_hosts(hass)
     gate = asyncio.Semaphore(SCAN_PARALLEL)
     done = 0
@@ -154,7 +192,7 @@ async def async_discover(
         nonlocal done
         async with gate:
             if await _port_open(host, port):
-                unit = await async_probe(host, port)
+                unit = await async_probe(host, port, model=model)
                 if unit and unit.matched:
                     found.append(unit)
         done += 1

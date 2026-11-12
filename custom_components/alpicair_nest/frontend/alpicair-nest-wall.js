@@ -296,6 +296,20 @@ const TITLES = {
   hmi: ["HMI", "HMI", "HMI"],
   rtu1: ["RTU1", "RTU1", "RTU1"],
   rtu2: ["RTU2", "RTU2", "RTU2"],
+  // the NEST's own menus
+  pool: ["Бассейн", "Baseins", "Pool"],
+  fanOther: ["Баланс и тахометр", "Balanss un tahometrs", "Balance and tacho"],
+  recirc: ["Рециркуляция", "Recirkulācija", "Recirculation"],
+  weekly: ["Неделя", "Nedēļa", "Week"],
+  holidays: ["Отпуск", "Brīvdienas", "Holidays"],
+  remote: ["Внешние переключатели", "Ārējie slēdži", "Remote switches"],
+  firetest: ["Тест огнезадерживающего клапана", "Ugunsdrošības vārsta tests", "Fire damper test"],
+  corrections: ["Поправки датчиков", "Sensoru korekcijas", "Sensor corrections"],
+  svcTemperature: ["Температура", "Temperatūra", "Temperature"],
+  svcAir: ["Качество воздуха", "Gaisa kvalitāte", "Air quality"],
+  coilsHeater: ["Нагреватель", "Sildītājs", "Heater"],
+  coilsPre: ["Преднагреватель", "Priekšsildītājs", "Pre-heater"],
+  coilsCool: ["Охладители", "Dzesētāji", "Coolers"],
   // readings
   r_temperature: ["Температура", "Temperatūra", "Temperature"],
   r_air: ["Воздух", "Gaiss", "Air"],
@@ -458,6 +472,92 @@ const TREE = [
           { id: "rtu2", icon: "chip", match: /^(Modbus_RTU2_|RTU2_|TargetSlave_)/ },
         ],
       },
+    ],
+  },
+];
+
+for (let n = 1; n <= 10; n += 1) TITLES[`event${n}`] = [`Событие ${n}`, `Notikums ${n}`, `Event ${n}`];
+for (let n = 1; n <= 5; n += 1) TITLES[`holiday${n}`] = [`Отпуск ${n}`, `Brīvdienas ${n}`, `Holiday ${n}`];
+
+const numbered = (count, id, start) => {
+  const kids = [];
+  for (let n = 1; n <= count; n += 1) kids.push({ id: `${id}${n}`, icon: "calendar", match: new RegExp(`^${start}${n}(_|$)`) });
+  return kids;
+};
+
+// the menu of a NEST (MCB controller): its settings are told apart by section, and by name within one
+const TREE_NEST = [
+  { id: "mode", icon: "power", view: "modes" },
+  {
+    id: "climate", icon: "thermo", kids: [
+      { id: "targets", icon: "thermo", sections: ["temperature"] },
+      { id: "season", icon: "sun", sections: ["season"] },
+      { id: "freecool", icon: "snow", sections: ["free_cooling"] },
+      { id: "pool", icon: "drop", sections: ["pool"] },
+    ],
+  },
+  {
+    id: "vent", icon: "fan", kids: [
+      {
+        id: "speeds", icon: "fan", kids: [
+          { id: "speedSupply", icon: "fan", match: /^Linear_Fan1_/ },
+          { id: "speedExhaust", icon: "fan", match: /^Linear_Fan2_/ },
+        ],
+      },
+      { id: "fanOther", icon: "sliders", sections: ["fans"], match: /^(?!Linear_)/ },
+      { id: "recirc", icon: "flow", sections: ["dampers"] },
+      { id: "hood", icon: "hood", sections: ["cooker_hood"] },
+    ],
+  },
+  {
+    id: "air", icon: "leaf", kids: [
+      { id: "co2", icon: "leaf", sections: ["air_quality"], match: /^Co2_/ },
+      { id: "humidity", icon: "drop", sections: ["air_quality"], match: /^(?!Co2_)/ },
+    ],
+  },
+  {
+    id: "schedule", icon: "calendar", kids: [
+      { id: "weekly", icon: "calendar", kids: numbered(10, "event", "Weekly_Scheduler_Event_") },
+      { id: "holidays", icon: "sun", kids: numbered(5, "holiday", "Holidays_Scheduler_Interval_") },
+    ],
+  },
+  { id: "readings", icon: "chart", view: "readings" },
+  { id: "faults", icon: "alert", view: "faults" },
+  {
+    id: "system", icon: "sliders", kids: [
+      { id: "control", icon: "power", sections: ["operation", "system"] },
+      { id: "time", icon: "clock", clock: true, sections: ["time"] },
+      { id: "remote", icon: "chip", sections: ["digital_inputs"] },
+      { id: "firetest", icon: "alert", sections: ["fire"] },
+      { id: "corrections", icon: "thermo", sections: ["temp_sensors"] },
+      { id: "pid", icon: "sliders", sections: ["pid"] },
+      { id: "upkeep", title: "maintenance", icon: "shield", sections: ["maintenance"] },
+      { id: "screen", icon: "palette", view: "screen" },
+      { id: "about", icon: "info", view: "about" },
+    ],
+  },
+  {
+    id: "service", icon: "lock", service: true, kids: [
+      { id: "maintenance", icon: "shield", sections: ["maintenance"] },
+      { id: "unit", icon: "chip", sections: ["system"] },
+      { id: "svcTemperature", icon: "thermo", sections: ["temperature"] },
+      { id: "tempsensors", icon: "thermo", sections: ["temp_sensors"] },
+      { id: "fanhw", icon: "fan", sections: ["fan_hw"] },
+      { id: "pressuresensors", icon: "gauge", sections: ["pressure"] },
+      { id: "analog", icon: "chip", sections: ["analog_inputs"] },
+      { id: "digital", icon: "chip", sections: ["digital_inputs"] },
+      { id: "dampers", icon: "flow", sections: ["dampers"] },
+      { id: "fire", icon: "alert", sections: ["fire"] },
+      {
+        id: "coils", icon: "sun", kids: [
+          { id: "coilsHeater", icon: "sun", sections: ["coils"], match: /^(Heater_|Electrical_Heater|Hydronic_Heater|Antifrost_|Water_Temperature|Hydronic_Pump)/ },
+          { id: "coilsPre", icon: "bolt", sections: ["coils"], match: /^(Preheater_|Hydronic_Preheater|El_Preheater)/ },
+          { id: "coilsCool", icon: "snow", sections: ["coils"], match: /^(Hydronic_Cooler|Hcooler|Dx_|Max_Fan_Speed_Change|Minimal_Supply_Air_Flow|Enable_Remote)/ },
+        ],
+      },
+      { id: "recovery", icon: "flow", sections: ["recovery"] },
+      { id: "svcAir", icon: "leaf", sections: ["air_quality"] },
+      { id: "fieldbus", icon: "chip", sections: ["fieldbus"] },
     ],
   },
 ];
@@ -789,15 +889,9 @@ class AlpicAirNestWall extends HTMLElement {
     this._token = null;
     this._tokenUntil = 0;
     this._pendingTarget = null;
-    this._nodes = {};
-    const index = (nodes, parent, service) => {
-      nodes.forEach((node) => {
-        const entry = Object.assign({}, node, { parent, service: service || Boolean(node.service) });
-        this._nodes[node.id] = entry;
-        if (node.kids) index(node.kids, entry, entry.service);
-      });
-    };
-    index(TREE, null, false);
+    // what differs between a NEST and a NEST LS; the unit's own comes with its schema
+    this._profile = { model: "nest_ls", selectable: [0, 1, 2, 3, 4, 5], auto: true, schedule: true };
+    this._plant(TREE);
     this._onResize = () => this._fit();
     this._onTouch = () => {
       this._last = Date.now();
@@ -881,6 +975,34 @@ class AlpicAirNestWall extends HTMLElement {
   _state(entity) {
     const state = this._hass && this._hass.states[entity];
     return state ? state.state : null;
+  }
+
+  // the menu of the kind of unit that is shown
+  _plant(tree) {
+    this._tree = tree;
+    this._nodes = {};
+    const index = (nodes, parent, service) => {
+      nodes.forEach((node) => {
+        const entry = Object.assign({}, node, { parent, service: service || Boolean(node.service) });
+        this._nodes[node.id] = entry;
+        if (node.kids) index(node.kids, entry, entry.service);
+      });
+    };
+    index(tree, null, false);
+  }
+
+  _isNest() {
+    return this._profile.model === "nest";
+  }
+
+  // the wall panel's own short names, but a NEST's modes are named by the unit
+  _modeName(mode) {
+    const names = this._isNest() && mode && this._profile.modes ? this._profile.modes : this._t.modes;
+    return or(names[mode], "—");
+  }
+
+  _modes() {
+    return this._profile.selectable.filter((mode) => mode !== 0);
   }
 
   _title(id) {
@@ -1027,6 +1149,13 @@ class AlpicAirNestWall extends HTMLElement {
       return out;
     };
     this._schema = schema;
+    if (schema.profile) this._profile = schema.profile;
+    const tree = this._isNest() ? TREE_NEST : TREE;
+    if (tree !== this._tree) {
+      this._plant(tree);
+      // a screen of the other kind of unit's menu leads nowhere here
+      if (this._stack && this._stack.some((top) => top.id && !this._nodes[top.id])) this._stack = [{ view: "home" }];
+    }
     this._datapoints = table(schema.datapoints);
     this._setpoints = table(schema.setpoints);
   }
@@ -1195,15 +1324,15 @@ class AlpicAirNestWall extends HTMLElement {
     const t = this._t;
     const mode = this._dp.CurrentOperatingMode;
     const how = { 0: t.onSchedule, 1: t.manual, 2: t.temporary }[this._sp.ControlMode];
-    return { mode: or(t.modes[mode], "—"), how: how || "" };
+    return { mode: this._modeName(mode), how: how || "" };
   }
 
   _airValue() {
     const t = this._t;
-    const inputs = [this._sp.AI1_Configuration, this._sp.AI2_Configuration, this._sp.AI3_Configuration];
-    if (inputs.includes(1)) return [t.humidity, this._reading("AI_ExtractAirHumidity")];
-    if (inputs.includes(3)) return [t.humidity, this._reading("AI_SupplyAirHumidity")];
-    if (inputs.includes(2)) return ["CO₂", this._reading("AI_ExtractAirCO2")];
+    const sensors = this._status.virtual.sensors || [];
+    if (sensors.includes("extract_humidity")) return [t.humidity, this._reading("AI_ExtractAirHumidity", 0)];
+    if (sensors.includes("supply_humidity")) return [t.humidity, this._reading("AI_SupplyAirHumidity", 0)];
+    if (sensors.includes("extract_co2")) return ["CO₂", this._reading("AI_ExtractAirCO2")];
     const efficiency = this._status.virtual.recovery_efficiency;
     return [t.recovery, efficiency === undefined ? "—" : `${this._number(efficiency)} %`];
   }
@@ -1286,8 +1415,8 @@ class AlpicAirNestWall extends HTMLElement {
       <b>${esc(label)}</b><span>${esc(mode ? this._modeFacts(mode) : "")}</span></button>`;
     return `<div class="sheet-head"><b>${esc(t.mode)}</b><span>${esc(t.closesOnPick)}</span></div>
       <div class="picks">
-        <button class="pick span ${auto ? "on" : ""}" data-do="auto"><b>${esc(t.scheduleMode)}</b><span>${esc(auto ? this._modeState().mode : "")}</span></button>
-        ${[1, 2, 3, 4, 5].map((mode) => pick(mode, t.modes[mode])).join("")}${pick(0, t.turnOff)}
+        ${this._profile.auto ? `<button class="pick span ${auto ? "on" : ""}" data-do="auto"><b>${esc(t.scheduleMode)}</b><span>${esc(auto ? this._modeState().mode : "")}</span></button>` : ""}
+        ${this._modes().map((mode) => pick(mode, this._modeName(mode))).join("")}${pick(0, t.turnOff)}
       </div>`;
   }
 
@@ -1434,8 +1563,13 @@ class AlpicAirNestWall extends HTMLElement {
 
   // the fans
 
+  // a NEST's steps are always in percent, whatever its fans are held by
+  _fanStrategy() {
+    return this._profile && this._profile.model === "nest" ? 0 : this._sp.Fans_ControlStrategy;
+  }
+
   _fanName(mode, fan) {
-    const strategy = this._sp.Fans_ControlStrategy;
+    const strategy = this._fanStrategy();
     const suffix = { 1: "Unoccupied", 2: "Economy", 3: "Comfort", 4: "Boost", 5: "KitchenHood" }[mode];
     const start = { 0: `Linear_Fan${fan}_Fanspeed_`, 1: `Constant_Airflow_Fan${fan}_`, 2: `Constant_Pressure_Fan${fan}_` }[strategy];
     if (!suffix || !start) return null;
@@ -1450,7 +1584,7 @@ class AlpicAirNestWall extends HTMLElement {
   }
 
   _fanNow() {
-    const name = { 1: "Airflow_Supply", 2: "Pressure_1" }[this._sp.Fans_ControlStrategy] || "Fan1_Output";
+    const name = { 1: "Airflow_Supply", 2: "Pressure_1" }[this._fanStrategy()] || "Fan1_Output";
     return { value: this._dp[name], unit: this._unit(this._datapoints[name] ? this._datapoints[name].unit : "%") };
   }
 
@@ -1486,7 +1620,7 @@ class AlpicAirNestWall extends HTMLElement {
     const same = pending && pending.items[0].name === items[0].name;
     const values = same ? pending.values : items.map((item) => or(this._sp[item.name], item.min));
     // both move by the same amount, so the balance between supply and extract stays as it was
-    let change = direction * FAN_STEPS[this._sp.Fans_ControlStrategy];
+    let change = direction * FAN_STEPS[this._fanStrategy()];
     items.forEach((item, index) => {
       change = Math.min(item.max - values[index], Math.max(item.min - values[index], change));
     });
@@ -1530,20 +1664,25 @@ class AlpicAirNestWall extends HTMLElement {
   _targetName() {
     const side = this._sp.AirTemp_ControlStrategy === 1 ? "Extract" : "Supply";
     const mode = or({ 1: "Unoccupied", 2: "Economy", 3: "Comfort" }[this._dp.CurrentOperatingMode], "Comfort");
-    return `AirTemp_${side}Target_${mode}`;
+    const name = `AirTemp_${side}Target_${mode}`;
+    // a NEST has one target for each mode, whichever air it is held by
+    return this._setpoints[name] ? name : `AirTemp_SupplyTarget_${mode}`;
   }
 
   _targetLimits() {
     const item = this._setpoints[this._targetName()] || { min: 0, max: 50 };
+    const limits = this._profile.target_limits || [item.min, item.max];
     return {
-      low: Math.max(item.min, or(this._sp.AirTemp_MinAllowedSetpoint, item.min)),
-      high: Math.min(item.max, or(this._sp.AirTemp_MaxAllowedSetpoint, item.max)),
+      low: Math.max(item.min, limits[0], or(this._sp.AirTemp_MinAllowedSetpoint, item.min)),
+      high: Math.min(item.max, limits[1], or(this._sp.AirTemp_MaxAllowedSetpoint, item.max)),
     };
   }
 
   _targetValue() {
     const raw = this._pendingTarget ? this._pendingTarget.value : this._sp[this._targetName()];
     if (raw === undefined || raw === null) return null;
+    // on a NEST, 0 in place of a target means energy saving
+    if (this._isNest() && raw === 0) return null;
     const { low, high } = this._targetLimits();
     return Math.min(high, Math.max(low, raw));
   }
@@ -1588,9 +1727,11 @@ class AlpicAirNestWall extends HTMLElement {
 
   _nudgeTarget(direction) {
     const name = this._targetName();
-    const start = this._pendingTarget && this._pendingTarget.name === name ? this._pendingTarget.value : this._targetValue();
-    if (start === null) return;
     const { low, high } = this._targetLimits();
+    let start = this._pendingTarget && this._pendingTarget.name === name ? this._pendingTarget.value : this._targetValue();
+    // out of a NEST's energy saving, the first tap gives the lowest temperature
+    if (start === null && this._isNest() && this._sp[name] === 0) start = low - direction * TARGET_STEP;
+    if (start === null) return;
     this._pendingTarget = { name, value: Math.min(high, Math.max(low, start + direction * TARGET_STEP)) };
     if (this._top.view === "home") this._refreshHome();
     else this._refreshTemp();
@@ -1626,7 +1767,7 @@ class AlpicAirNestWall extends HTMLElement {
         <div class="bar-text"><b>${esc(t.menu)}</b></div>
       </div>
       <div class="body">
-        <div class="grid">${TREE.map(tile).join("")}</div>
+        <div class="grid">${this._tree.map(tile).join("")}</div>
         <div class="leave">
           <button class="out" data-do="exit" aria-label="${esc(t.exit)}">${icon("exit")}<b>${esc(this._embed ? this._embed.leave || t.exit : this._homeName())}</b></button>
           ${this._embed ? "" : `<button class="set" data-do="targets" aria-label="${esc(t.menuButton)}">${icon("sliders")}</button>`}
@@ -1636,14 +1777,15 @@ class AlpicAirNestWall extends HTMLElement {
 
   _items(node) {
     const service = node.service;
+    const inside = (item) => (!node.sections || node.sections.includes(item.section)) && (!node.match || node.match.test(item.name));
     return this._schema.setpoints.filter(
-      (item) => node.match.test(item.name) && (item.level === "service") === service && item.name !== "Scheduler_Mode"
+      (item) => inside(item) && (item.level === "service") === service && item.name !== "Scheduler_Mode"
     );
   }
 
   _size(node) {
     if (node.kids) return this._t.sections(node.kids.length);
-    if (node.match) return this._t.settings(this._items(node).length);
+    if (node.match || node.sections) return this._t.settings(this._items(node).length);
     return "";
   }
 
@@ -1702,13 +1844,15 @@ class AlpicAirNestWall extends HTMLElement {
 
   _view_modes() {
     const t = this._t;
-    const card = (mode, name, cls = "") => `<button class="mode ${cls}" data-mode="${mode}">
-      <div class="box">${icon(name)}</div><div><b>${esc(t.modes[mode])}</b><span id="m-${mode}"></span></div></button>`;
+    const icons = { 1: "moon", 2: "leaf", 3: "person", 4: "rocket", 5: "hood" };
+    const card = (mode) => `<button class="mode" data-mode="${mode}">
+      <div class="box">${icon(icons[mode])}</div><div><b>${esc(this._modeName(mode))}</b><span id="m-${mode}"></span></div></button>`;
+    const auto = `<button class="mode span" data-do="auto"><div class="box">${icon("calendar")}</div>
+          <div><b>${esc(t.scheduleMode)}</b><span id="m-auto"></span></div></button>`;
     return `${this._bar(this._title("mode"), t.menu)}
       <div class="body"><div class="modes">
-        <button class="mode span" data-do="auto"><div class="box">${icon("calendar")}</div>
-          <div><b>${esc(t.scheduleMode)}</b><span id="m-auto"></span></div></button>
-        ${card(1, "moon")}${card(2, "leaf")}${card(3, "person")}${card(4, "rocket")}${card(5, "hood")}
+        ${this._profile.auto ? auto : ""}
+        ${this._modes().map(card).join("")}
         <button class="mode" data-mode="0"><div class="box">${icon("power")}</div><div><b>${esc(t.turnOff)}</b></div></button>
       </div></div>`;
   }
@@ -1717,9 +1861,13 @@ class AlpicAirNestWall extends HTMLElement {
     const suffix = { 1: "Unoccupied", 2: "Economy", 3: "Comfort" }[mode];
     const fan = this._setpoints[this._fanName(mode, 1)];
     const speed = fan ? this._setting(fan) : "";
-    const side = this._sp.AirTemp_ControlStrategy === 1 ? "Extract" : "Supply";
-    const target = mode <= 3 ? this._degrees(this._sp[`AirTemp_${side}Target_${suffix}`]) : "";
-    const timer = mode === 4 && this._sp.BoostMode_Timer ? `${this._number(this._sp.BoostMode_Timer)} ${this._unit("min")}` : "";
+    const side = this._sp.AirTemp_ControlStrategy === 1 && !this._isNest() ? "Extract" : "Supply";
+    const degrees = this._sp[`AirTemp_${side}Target_${suffix}`];
+    // on a NEST, 0 in place of a target means energy saving
+    const target = mode <= 3 && !(this._isNest() && !degrees) ? this._degrees(degrees) : "";
+    // a NEST keeps its boost time in seconds
+    const boost = this._sp.BoostMode_Timer || Math.round(or(this._sp.BoostMode_Timer_Seconds, 0) / 60);
+    const timer = mode === 4 && boost ? `${this._number(boost)} ${this._unit("min")}` : "";
     return [speed, target, timer].filter(Boolean).join(" · ");
   }
 
@@ -1727,14 +1875,15 @@ class AlpicAirNestWall extends HTMLElement {
     const root = this.shadowRoot;
     const auto = this._sp.ControlMode === 0;
     const current = this._dp.CurrentOperatingMode;
-    root.querySelector('[data-do="auto"]').classList.toggle("on", auto);
+    const button = root.querySelector('[data-do="auto"]');
+    if (button) button.classList.toggle("on", auto);
     root.querySelectorAll("[data-mode]").forEach((node) => {
       const mode = Number(node.dataset.mode);
       node.classList.toggle("on", !auto && mode === current);
       const label = root.getElementById(`m-${mode}`);
       if (label) label.textContent = this._modeFacts(mode);
     });
-    root.getElementById("m-auto").textContent = auto ? this._modeState().mode : "";
+    if (button) root.getElementById("m-auto").textContent = auto ? this._modeState().mode : "";
   }
 
   // editor for numbers, picker for choices
@@ -2261,8 +2410,8 @@ class AlpicAirNestWall extends HTMLElement {
         ${fact(t.firmware, unit.firmware)}${fact(t.bootloader, unit.bootloader)}
         ${fact(t.host, unit.host)}${fact(t.port, unit.port)}${fact(t.unitId, unit.unit)}
         ${fact(t.protocol, unit.framing === "rtu" ? "RTU over TCP" : "Modbus TCP")}
-        ${fact(t.ip, this._status.virtual.ip)}${fact(t.mac, this._status.virtual.mac)}
-        ${fact(t.eeprom, this._dp.WriteToEepromCounter)}
+        ${this._isNest() ? fact("ID", this._status.virtual.serial) : `${fact(t.ip, this._status.virtual.ip)}${fact(t.mac, this._status.virtual.mac)}`}
+        ${this._datapoints.WriteToEepromCounter ? fact(t.eeprom, this._dp.WriteToEepromCounter) : ""}
       </div></div>`;
   }
 
@@ -2571,6 +2720,7 @@ class AlpicAirNestWall extends HTMLElement {
 }
 
 AlpicAirNestWall.TREE = TREE;
+AlpicAirNestWall.TREE_NEST = TREE_NEST;
 AlpicAirNestWall.TITLES = TITLES;
 AlpicAirNestWall.STRINGS = STRINGS;
 AlpicAirNestWall.EMBED = 1;

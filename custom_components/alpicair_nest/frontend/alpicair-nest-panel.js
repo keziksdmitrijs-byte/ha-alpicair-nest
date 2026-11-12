@@ -46,7 +46,7 @@ const STRINGS = {
     pin: "Сервисный PIN", unlock: "Открыть", lock: "Закрыть доступ", unlockedFor: (t) => `Доступ открыт ещё ${t}`,
     needAdmin: "Сервисные настройки доступны только администраторам.",
     connection: "Подключение", host: "Адрес", port: "Порт", unitId: "Адрес Modbus", framing: "Протокол",
-    mac: "MAC", ip: "IP установки", firmware: "Прошивка", bootloader: "Загрузчик", eeprom: "Записей в EEPROM",
+    mac: "MAC", serial: "Номер установки", model: "Модель", ip: "IP установки", firmware: "Прошивка", bootloader: "Загрузчик", eeprom: "Записей в EEPROM",
     factory: "заводское", dangerAsk: "Неверное значение может остановить установку или оборвать связь с ней. Продолжить?",
     dangerPress: "Команда выполнится сразу и может остановить установку. Продолжить?",
     activeFaults: "Сейчас", noFaults: "Неисправностей нет", resetErrors: "Сбросить ошибки", history: "История",
@@ -71,6 +71,7 @@ const STRINGS = {
       temp_sensors: "Датчики температуры", pressure: "Давление", analog_inputs: "Аналоговые входы", digital_inputs: "Цифровые входы",
       dampers: "Клапаны", fire: "Пожарная защита", coils: "Нагрев и охлаждение", recovery: "Рекуперация", network: "Сеть",
       fieldbus: "Шина", maintenance: "Обслуживание", air: "Воздух", inputs: "Входы", device: "Устройство",
+      season: "Зима и лето", pool: "Бассейн", holidays: "Отпуск", week_schedule: "Недельное расписание", pid: "Регуляторы",
     },
   },
   en: {
@@ -102,7 +103,7 @@ const STRINGS = {
     pin: "Service PIN", unlock: "Unlock", lock: "Lock", unlockedFor: (t) => `Unlocked for ${t}`,
     needAdmin: "Service settings are for administrators only.",
     connection: "Connection", host: "Address", port: "Port", unitId: "Modbus unit ID", framing: "Framing",
-    mac: "MAC", ip: "Unit IP", firmware: "Firmware", bootloader: "Bootloader", eeprom: "EEPROM writes",
+    mac: "MAC", serial: "Unit ID", model: "Model", ip: "Unit IP", firmware: "Firmware", bootloader: "Bootloader", eeprom: "EEPROM writes",
     factory: "factory", dangerAsk: "A wrong value can stop the unit or cut the connection to it. Continue?",
     dangerPress: "This runs at once and can stop the unit. Continue?",
     activeFaults: "Now", noFaults: "No faults", resetErrors: "Reset errors", history: "History",
@@ -127,6 +128,7 @@ const STRINGS = {
       temp_sensors: "Temperature sensors", pressure: "Pressure", analog_inputs: "Analog inputs", digital_inputs: "Digital inputs",
       dampers: "Dampers", fire: "Fire protection", coils: "Heating and cooling", recovery: "Heat recovery", network: "Network",
       fieldbus: "Fieldbus", maintenance: "Maintenance", air: "Air", inputs: "Inputs", device: "Device",
+      season: "Winter and summer", pool: "Pool", holidays: "Holidays", week_schedule: "Weekly schedule", pid: "Controllers",
     },
   },
 };
@@ -452,6 +454,8 @@ class AlpicAirNestPanel extends HTMLElement {
     this._dp = {};
     this._sp = {};
     this._status = { available: true, virtual: {}, faults: [], words: {} };
+    // what differs between a NEST and a NEST LS; the unit's own comes with its schema
+    this._profile = { model: "nest_ls", selectable: [0, 1, 2, 3, 4, 5], auto: true, schedule: true };
     this._section = {};
     this._find = "";
     this._day = 0;
@@ -463,7 +467,7 @@ class AlpicAirNestPanel extends HTMLElement {
     this._onResize = () => this._fit();
     this._onHash = () => {
       const tab = location.hash.slice(1);
-      if (TABS.includes(tab) && tab !== this._tab) this._openTab(tab);
+      if (this._tabs().includes(tab) && tab !== this._tab) this._openTab(tab);
     };
     this.shadowRoot.addEventListener("click", (event) => this._onClick(event));
     this.shadowRoot.addEventListener("change", (event) => this._onChange(event));
@@ -602,6 +606,8 @@ class AlpicAirNestPanel extends HTMLElement {
   async _load() {
     const schema = await this._call("schema", { language: this._lang });
     this._schema = schema;
+    if (schema.profile) this._profile = schema.profile;
+    if (!this._tabs().includes(this._tab)) this._tab = "overview";
     this._datapoints = byName(schema.datapoints);
     this._setpoints = byName(schema.setpoints);
     this._loadedLang = this._lang;
@@ -614,6 +620,15 @@ class AlpicAirNestPanel extends HTMLElement {
 
   _call(command, fields = {}) {
     return this._hass.callWS({ type: `${DOMAIN}/${command}`, entry_id: this._entry, ...fields });
+  }
+
+  // a NEST keeps its schedule among its settings: it has no week to draw
+  _tabs() {
+    return TABS.filter((tab) => tab !== "schedule" || this._profile.schedule);
+  }
+
+  _modeName(mode) {
+    return or((this._profile.modes || this._t.modes)[mode], "—");
   }
 
   _onEvent(event) {
@@ -665,7 +680,7 @@ class AlpicAirNestPanel extends HTMLElement {
   _drawTabs() {
     const t = this._t;
     const count = this._status.faults.length;
-    this.shadowRoot.querySelector("nav.tabs").innerHTML = TABS.map(
+    this.shadowRoot.querySelector("nav.tabs").innerHTML = this._tabs().map(
       (tab) => `<button role="tab" aria-selected="${tab === this._tab}" data-action="tab" data-tab="${tab}">
         <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="${ICONS[tab]}"/></svg>${esc(t.tabs[tab])}${
         tab === "faults" && count ? `<span class="count">${count}</span>` : ""
@@ -732,7 +747,8 @@ class AlpicAirNestPanel extends HTMLElement {
 
   _overviewPage() {
     const t = this._t;
-    const modeButton = (mode) => `<button class="btn" data-action="mode" data-mode="${mode}" aria-pressed="false">${esc(t.modes[mode])}</button>`;
+    const modeButton = (mode) => `<button class="btn" data-action="mode" data-mode="${mode}" aria-pressed="false">${esc(this._modeName(mode))}</button>`;
+    const modes = this._profile.selectable.filter((mode) => mode !== 0);
     return `<div class="banner" id="faults-banner" hidden><span></span><button class="btn" data-action="tab" data-tab="faults">${esc(t.showFaults)}</button></div>
       <div class="overview">
         <div class="card">
@@ -759,8 +775,8 @@ class AlpicAirNestPanel extends HTMLElement {
         <div class="card control">
           <h2>${esc(t.control)}</h2>
           <div class="modes">
-            <button class="btn wide" data-action="auto" aria-pressed="false">${esc(t.scheduleMode)}</button>
-            ${[1, 2, 3, 4, 5].map(modeButton).join("")}
+            ${this._profile.auto ? `<button class="btn wide" data-action="auto" aria-pressed="false">${esc(t.scheduleMode)}</button>` : ""}
+            ${modes.map(modeButton).join("")}
             <button class="btn" data-action="mode" data-mode="0" aria-pressed="false">${esc(t.off)}</button>
           </div>
           <p class="now" id="now"></p>
@@ -787,7 +803,14 @@ class AlpicAirNestPanel extends HTMLElement {
   _targetName() {
     const side = this._sp.AirTemp_ControlStrategy === 1 ? "Extract" : "Supply";
     const mode = or({ 1: "Unoccupied", 2: "Economy", 3: "Comfort" }[this._dp.CurrentOperatingMode], "Comfort");
-    return `AirTemp_${side}Target_${mode}`;
+    const name = `AirTemp_${side}Target_${mode}`;
+    // a NEST has one target for each mode, whichever air it is held by
+    return this._setpoints[name] ? name : `AirTemp_SupplyTarget_${mode}`;
+  }
+
+  // on a NEST, 0 in place of a target means energy saving
+  _degreesOrNone(value) {
+    return (this._profile.target_limits && !value) || value === undefined || value === null ? "—" : `${this._number(value, 1)} °C`;
   }
 
   _refreshOverview(faultsChanged) {
@@ -813,25 +836,28 @@ class AlpicAirNestPanel extends HTMLElement {
     root.getElementById("core").textContent = virtual.recovery_efficiency === undefined ? "—" : `${this._number(virtual.recovery_efficiency)} %`;
 
     const auto = sp.ControlMode === 0;
-    root.querySelector('[data-action="auto"]').setAttribute("aria-pressed", String(auto));
+    const autoButton = root.querySelector('[data-action="auto"]');
+    if (autoButton) autoButton.setAttribute("aria-pressed", String(auto));
     root.querySelectorAll('[data-action="mode"]').forEach((button) => {
       button.setAttribute("aria-pressed", String(!auto && Number(button.dataset.mode) === dp.CurrentOperatingMode));
     });
     const how = { 0: t.onSchedule, 1: t.manual, 2: t.temporary }[sp.ControlMode];
-    const state = `${or(t.modes[dp.CurrentOperatingMode], "—")}${how ? ` · ${how}` : ""}`;
+    const state = `${this._modeName(dp.CurrentOperatingMode)}${how ? ` · ${how}` : ""}`;
     root.getElementById("now").textContent = `${t.now}: ${state}`;
     if (this._compact) root.getElementById("title").textContent = state;
 
     const name = this._targetName();
-    const extract = name.includes("Extract");
-    if (this._targetDraft === undefined) root.getElementById("target-value").textContent = `${this._number(sp[name], 1)} °C`;
+    const extract = sp.AirTemp_ControlStrategy === 1;
+    if (this._targetDraft === undefined) root.getElementById("target-value").textContent = this._degreesOrNone(sp[name]);
     const suffix = or({ 1: 1, 2: 2 }[dp.CurrentOperatingMode], 3);
-    root.getElementById("target-label").textContent = `${extract ? t.targetExtract : t.targetSupply} · ${t.modes[suffix]}`;
+    root.getElementById("target-label").textContent = `${extract ? t.targetExtract : t.targetSupply} · ${this._modeName(suffix)}`;
 
     const chips = [];
     if (dp.FreeCooling_ActiveOrNot) chips.push(t.freeCooling);
     if (dp.AirTemp_ERC_Deicing_HeatExchangerActive || dp.AirTemp_ERC_Deicing_FansActive) chips.push(t.deicing);
-    if (dp.BoostMode_RemainingTimer_Minutes > 0) chips.push(t.boostLeft(dp.BoostMode_RemainingTimer_Minutes));
+    // a NEST counts its boost down in seconds
+    const boost = dp.BoostMode_RemainingTimer_Minutes > 0 ? dp.BoostMode_RemainingTimer_Minutes : Math.ceil(or(dp.BoostMode_RemainingTimer_Seconds, 0) / 60);
+    if (boost > 0) chips.push(t.boostLeft(boost));
     root.getElementById("chips").innerHTML = chips.map((chip) => `<span class="chip">${esc(chip)}</span>`).join("");
 
     root.getElementById("tiles").innerHTML = this._tiles();
@@ -851,15 +877,16 @@ class AlpicAirNestPanel extends HTMLElement {
     const tiles = [
       fan(t.supplyFan, "Airflow_Supply", "Fan1_Output", "Fan1_RPM"),
       fan(t.exhaustFan, "Airflow_Exhaust", "Fan2_Output", "Fan2_RPM"),
-      this._tile(t.phase, this._reading("AirTemp_PhaseControl_WhatPhase"), `${t.presentTarget}: ${this._reading("AirTemp_SupplyControl_PresentSetpoint")}`),
+      this._tile(t.phase, this._reading(this._datapoints.AirTemp_PhaseControl_WhatPhase ? "AirTemp_PhaseControl_WhatPhase" : "SystemState"), `${t.presentTarget}: ${this._reading("AirTemp_SupplyControl_PresentSetpoint")}`),
     ];
-    if (sp.AirTemp_ERC_TypeInstalled === 1) tiles.push(this._tile(t.bypass, this._reading("AirTemp_ERC_Passive_BypassPosition", 0)));
-    else tiles.push(this._tile(t.rotor, this._reading("AirTemp_ERC_Rotary_Speed", 0)));
+    const { virtual } = this._status;
+    if (virtual.exchanger === "plate") tiles.push(this._tile(t.bypass, this._reading("AirTemp_ERC_Passive_BypassPosition", 0)));
+    else if (virtual.exchanger === "rotor") tiles.push(this._tile(t.rotor, this._reading("AirTemp_ERC_Rotary_Speed", 0)));
 
-    const inputs = [sp.AI1_Configuration, sp.AI2_Configuration, sp.AI3_Configuration];
-    if (inputs.includes(1)) tiles.push(this._tile(t.humidity, this._reading("AI_ExtractAirHumidity")));
-    if (inputs.includes(3)) tiles.push(this._tile(`${t.humidity}, ${t.supply.toLowerCase()}`, this._reading("AI_SupplyAirHumidity")));
-    if (inputs.includes(2)) tiles.push(this._tile(t.co2, this._reading("AI_ExtractAirCO2")));
+    const sensors = virtual.sensors || [];
+    if (sensors.includes("extract_humidity")) tiles.push(this._tile(t.humidity, this._reading("AI_ExtractAirHumidity", 0)));
+    if (sensors.includes("supply_humidity")) tiles.push(this._tile(`${t.humidity}, ${t.supply.toLowerCase()}`, this._reading("AI_SupplyAirHumidity", 0)));
+    if (sensors.includes("extract_co2")) tiles.push(this._tile(t.co2, this._reading("AI_ExtractAirCO2")));
 
     const left = dp.Filter_RemainingDays;
     const period = sp.Filter_TimerPeriod_Days;
@@ -958,7 +985,7 @@ class AlpicAirNestPanel extends HTMLElement {
     const items = this._schema.setpoints.filter(
       (item) => item.level !== "service" && item.section !== "schedule" && !item.danger && !item.read_only
     );
-    const order = ["operation", "temperature", "air_quality", "free_cooling", "fans", "temporary", "cooker_hood", "time", "system"];
+    const order = ["operation", "temperature", "season", "air_quality", "free_cooling", "fans", "temporary", "cooker_hood", "pool", "week_schedule", "holidays", "time", "system"];
     return this._browser("settings", items, order, (item) => this._settingRow(item, false), {
       time: () => this._clockRow(),
     });
@@ -1128,9 +1155,13 @@ class AlpicAirNestPanel extends HTMLElement {
     const unit = (this._units || []).find((candidate) => candidate.entry_id === this._entry) || {};
     const facts = [
       [t.host, unit.host], [t.port, unit.port], [t.unitId, unit.unit], [t.framing, unit.framing === "rtu" ? "RTU over TCP" : "Modbus TCP"],
-      [t.ip, this._status.virtual.ip], [t.mac, this._status.virtual.mac], [t.firmware, unit.firmware], [t.bootloader, unit.bootloader],
-      [t.eeprom, this._dp.WriteToEepromCounter],
+      [t.model, unit.model_name],
     ];
+    // a NEST has no network of its own to tell about, and no count of its memory writes
+    if (this._profile.model === "nest") facts.push([t.serial, this._status.virtual.serial]);
+    else facts.push([t.ip, this._status.virtual.ip], [t.mac, this._status.virtual.mac]);
+    facts.push([t.firmware, unit.firmware], [t.bootloader, unit.bootloader]);
+    if (this._datapoints.WriteToEepromCounter) facts.push([t.eeprom, this._dp.WriteToEepromCounter]);
     const body = `<div class="facts">${facts.map(([name, value]) => `<div><span>${esc(name)}</span>${esc(or(value, "—"))}</div>`).join("")}</div>`;
     return bare ? `<div style="padding:12px 0">${body}</div>` : `<div class="card"><h2>${esc(t.connection)}</h2>${body}</div>`;
   }
@@ -1160,7 +1191,7 @@ class AlpicAirNestPanel extends HTMLElement {
       <div class="card"><div class="actions" style="margin:0 0 8px"><h2 class="grow" style="margin:0">${esc(t.history)}</h2>
         ${this._admin ? `<button class="btn" data-action="clear-log">${esc(t.clearHistory)}</button>` : ""}</div>
         <div id="log"><div class="empty">${esc(t.loading)}</div></div></div>
-      <div class="card"><h2>${esc(t.rawWords)}</h2><div class="words" id="words"></div></div>`;
+      ${Object.keys(this._status.words).length ? `<div class="card"><h2>${esc(t.rawWords)}</h2><div class="words" id="words"></div></div>` : ""}`;
   }
 
   _faultName(fault) {
@@ -1301,8 +1332,9 @@ class AlpicAirNestPanel extends HTMLElement {
     const item = this._setpoints[name];
     const start = this._targetDraft && this._targetDraft.name === name ? this._targetDraft.value : this._sp[name];
     if (start === undefined || start === null) return;
-    const low = Math.max(item.min, or(this._sp.AirTemp_MinAllowedSetpoint, item.min));
-    const high = Math.min(item.max, or(this._sp.AirTemp_MaxAllowedSetpoint, item.max));
+    const limits = this._profile.target_limits || [item.min, item.max];
+    const low = Math.max(item.min, limits[0], or(this._sp.AirTemp_MinAllowedSetpoint, item.min));
+    const high = Math.min(item.max, limits[1], or(this._sp.AirTemp_MaxAllowedSetpoint, item.max));
     const value = Math.min(high, Math.max(low, start + direction * TARGET_STEP));
     this._targetDraft = { name, value };
     this.shadowRoot.getElementById("target-value").textContent = `${this._number(value, 1)} °C`;

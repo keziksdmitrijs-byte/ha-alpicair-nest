@@ -17,6 +17,7 @@ MAIN = {
     "AirTemp_SupplyTarget_Economy",
     "AirTemp_SupplyTarget_Comfort",
     "BoostMode_Timer",
+    "BoostMode_Timer_Seconds",
     "Filter_TimerPeriod_Days",
 }
 BY_UNIT = {"°C": NumberDeviceClass.TEMPERATURE, "Pa": NumberDeviceClass.PRESSURE}

@@ -7,7 +7,6 @@ service settings. The PIN is compared with the one in the unit; it is neither ke
 
 from __future__ import annotations
 
-import hmac
 import secrets
 import time
 from dataclasses import dataclass, field
@@ -23,6 +22,7 @@ from .client import ModbusError
 from .const import (
     CLOCK_REGISTERS,
     DOMAIN,
+    MODEL_NAMES,
     PIN_LOCK_SECONDS,
     PIN_MAX_TRIES,
     SCHEDULE_BASE,
@@ -30,7 +30,6 @@ from .const import (
     SCHEDULE_EVENTS,
     SCHEDULE_FIELDS,
     SERVICE_UNLOCK_SECONDS,
-    SP_SERVICE_PIN,
 )
 from .coordinator import NestCoordinator
 from .registers import Register
@@ -140,21 +139,42 @@ def _schema(coordinator: NestCoordinator, language: str) -> dict[str, Any]:
             item["flag"] = True
         datapoints.append(item)
     faults = {name: labels.get(language) or labels["en"] for name, labels in registers.faults.items()}
-    return {"datapoints": datapoints, "setpoints": setpoints, "faults": faults}
+    return {
+        "datapoints": datapoints,
+        "setpoints": setpoints,
+        "faults": faults,
+        "profile": _profile(coordinator, language),
+    }
+
+
+def _profile(coordinator: NestCoordinator, language: str) -> dict[str, Any]:
+    """What differs between the kinds of unit and is not a register."""
+    current = coordinator.registers.find("CurrentOperatingMode")
+    names = current.option_labels(language) if current else {}
+    return {
+        "model": coordinator.model,
+        "model_name": MODEL_NAMES[coordinator.model],
+        "modes": [names.get(mode, key) for mode, key in enumerate(coordinator.modes)],
+        "selectable": list(coordinator.selectable),
+        "auto": coordinator.has_auto,
+        "schedule": coordinator.has_schedule,
+        "target_limits": coordinator.target_limits,
+    }
 
 
 def _values(coordinator: NestCoordinator) -> dict[str, Any]:
     registers = coordinator.registers
     return {
-        "dp": {
-            r.name: r.decode(coordinator.data.dp.get(r.address)) for r in registers.datapoints.values() if not r.hidden
+        "dp": {r.name: r.decode(coordinator.raw(r)) for r in registers.datapoints.values() if not r.hidden},
+        "sp": {
+            **{r.name: r.decode(coordinator.raw(r)) for r in registers.setpoints.values()},
+            **coordinator.clock(),
         },
-        "sp": {r.name: r.decode(coordinator.data.sp.get(r.address)) for r in registers.setpoints.values()},
     }
 
 
 def _status(coordinator: NestCoordinator) -> dict[str, Any]:
-    words = {r.name: coordinator.data.dp.get(r.address) for r in coordinator.registers.datapoints.values() if r.fault}
+    words = {r.name: coordinator.raw(r) for r in coordinator.registers.datapoints.values() if r.fault and r.bits}
     return {
         "available": coordinator.last_update_success,
         "virtual": coordinator.data.virtual,
@@ -216,11 +236,14 @@ def ws_info(hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, An
             {
                 "entry_id": entry.entry_id,
                 "title": entry.title,
+                "model": coordinator.model,
+                "model_name": MODEL_NAMES[coordinator.model],
                 "host": coordinator.client.host,
                 "port": coordinator.client.port,
                 "unit": coordinator.client.unit,
                 "framing": coordinator.client.framing,
                 "mac": coordinator.data.virtual.get("mac"),
+                "serial": coordinator.data.virtual.get("serial"),
                 "ip": coordinator.data.virtual.get("ip"),
                 "firmware": coordinator.value("FirmwareVerMain"),
                 "bootloader": coordinator.value("FirmwareVerBootloader"),
@@ -320,9 +343,8 @@ async def ws_unlock(
     if access.locked_until > now:
         connection.send_error(msg["id"], ERR_TOO_MANY, str(int(access.locked_until - now) + 1))
         return
-    stored = await coordinator.async_read_register(SP_SERVICE_PIN)
     entered = msg["pin"].strip()
-    if not (entered.isdecimal() and hmac.compare_digest(str(int(entered)).encode(), str(stored).encode())):
+    if not (entered.isdecimal() and int(entered) <= 0xFFFF and await coordinator.async_check_service_pin(int(entered))):
         access.tries += 1
         if access.tries >= PIN_MAX_TRIES:
             access.tries = 0

@@ -4,7 +4,15 @@
     "step": {
       "user": {
         "title": "AlpicAir NEST",
-        "description": "Как добавить установку?",
+        "description": "Какая у вас установка?",
+        "menu_options": {
+          "nest": "NEST",
+          "nest_ls": "NEST LS"
+        }
+      },
+      "method": {
+        "title": "AlpicAir {model}",
+        "description": "Как добавить установку {model}?",
         "menu_options": {
           "manual": "Ввести IP-адрес",
           "discover": "Найти автоматически"
@@ -23,12 +31,12 @@
         }
       },
       "confirm": {
-        "title": "Не похоже на установку NEST",
-        "description": "{host} отвечает по Modbus (адрес {unit}), но не так, как установка NEST. Всё равно добавить?"
+        "title": "Не похоже на установку {model}",
+        "description": "{host} отвечает по Modbus (адрес {unit}), но не так, как установка {model}. Проверьте, что модель выбрана верно. Всё равно добавить?"
       },
       "discovered": {
         "title": "Найденные установки",
-        "description": "Найдено установок в сети: {count}.",
+        "description": "Найдено установок {model} в сети: {count}.",
         "data": {
           "device": "Установка"
         }
@@ -82,6 +90,7 @@
             "state": {
               "schedule": "По расписанию",
               "unoccupied": "Никого нет",
+              "building_protection": "Защита здания",
               "economy": "Эконом",
               "comfort": "Комфорт",
               "boost": "Буст",

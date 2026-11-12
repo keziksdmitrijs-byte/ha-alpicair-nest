@@ -1,4 +1,8 @@
-"""The unit's register map (registers.json is generated, see scripts/build_registers.py)."""
+"""The units' register maps.
+
+registers.json is the NEST LS (scripts/build_registers.py), registers_nest.json the NEST
+(scripts/build_registers_nest.py); both are generated.
+"""
 
 from __future__ import annotations
 
@@ -7,8 +11,18 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from .const import MODEL_NEST_LS, REGISTER_FILES
+
 KIND_DATAPOINT = "dp"
 KIND_SETPOINT = "sp"
+
+# where a register lives: the Modbus table, named after the place its raw value is kept in
+STORE_INPUT = "dp"
+STORE_HOLDING = "sp"
+STORE_COIL = "co"
+STORE_DISCRETE = "di"
+STORES = (STORE_INPUT, STORE_HOLDING, STORE_COIL, STORE_DISCRETE)
+_TABLES = {"i": STORE_INPUT, "h": STORE_HOLDING, "c": STORE_COIL, "d": STORE_DISCRETE}
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,6 +54,12 @@ class Register:
     flag: bool = False
     fault: str | None = None
     bits: dict[str, str] = field(default_factory=dict)
+    store: str = STORE_HOLDING
+
+    @property
+    def single_bit(self) -> bool:
+        """A coil or a discrete input."""
+        return self.store in (STORE_COIL, STORE_DISCRETE)
 
     def label(self, language: str) -> str:
         return self.labels.get(language) or self.labels["en"]
@@ -82,9 +102,16 @@ class RegisterMap:
     def get(self, name: str) -> Register:
         return self.setpoints.get(name) or self.datapoints[name]
 
+    def find(self, name: str) -> Register | None:
+        """A register this kind of unit may not have."""
+        return self.setpoints.get(name) or self.datapoints.get(name)
 
-def _load_sync() -> RegisterMap:
-    raw = json.loads((Path(__file__).parent / "registers.json").read_text(encoding="utf-8"))
+    def addresses(self, store: str) -> set[int]:
+        return {r.address for table in (self.datapoints, self.setpoints) for r in table.values() if r.store == store}
+
+
+def _load_sync(file: str) -> RegisterMap:
+    raw = json.loads((Path(__file__).parent / file).read_text(encoding="utf-8"))
     datapoints = {
         r["n"]: Register(
             kind=KIND_DATAPOINT,
@@ -101,6 +128,7 @@ def _load_sync() -> RegisterMap:
             flag=bool(r.get("flag")),
             fault=r.get("fault"),
             bits=r.get("bits", {}),
+            store=_TABLES[r.get("tb", "i")],
         )
         for r in raw["dp"]
     }
@@ -125,21 +153,21 @@ def _load_sync() -> RegisterMap:
             danger=bool(r.get("danger")),
             command=r.get("cmd"),
             hint=r.get("t", ""),
+            store=_TABLES[r.get("tb", "h")],
         )
         for r in raw["sp"]
     }
     return RegisterMap(datapoints, setpoints, raw["faults"], raw)
 
 
-_CACHE: RegisterMap | None = None
+_CACHE: dict[str, RegisterMap] = {}
 
 
-async def async_load_registers(hass) -> RegisterMap:
-    """Load the map once, away from the event loop."""
-    global _CACHE
-    if _CACHE is None:
-        _CACHE = await hass.async_add_executor_job(_load_sync)
-    return _CACHE
+async def async_load_registers(hass, model: str = MODEL_NEST_LS) -> RegisterMap:
+    """Load a model's map once, away from the event loop."""
+    if model not in _CACHE:
+        _CACHE[model] = await hass.async_add_executor_job(_load_sync, REGISTER_FILES[model])
+    return _CACHE[model]
 
 
 def read_blocks(addresses: list[int], max_gap: int = 12, max_length: int = 100) -> list[tuple[int, int]]:

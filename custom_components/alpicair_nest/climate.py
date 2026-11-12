@@ -16,7 +16,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import NestConfigEntry
-from .const import CONTROL_AUTO, OPERATING_MODES
+from .const import CONTROL_AUTO
 from .coordinator import NestCoordinator
 from .entity import NestEntity
 
@@ -41,7 +41,6 @@ class NestClimate(NestEntity, ClimateEntity):
 
     _attr_translation_key = "nest"
     _attr_hvac_modes = [HVACMode.OFF, HVACMode.FAN_ONLY]
-    _attr_preset_modes = [PRESET_SCHEDULE, *OPERATING_MODES[1:]]
     _attr_supported_features = (
         ClimateEntityFeature.TARGET_TEMPERATURE
         | ClimateEntityFeature.PRESET_MODE
@@ -56,6 +55,8 @@ class NestClimate(NestEntity, ClimateEntity):
         super().__init__(coordinator, "climate", "unit", None)
         self.entity_id = "climate.alpicair_nest"
         self._resume = COMFORT
+        modes = [coordinator.modes[mode] for mode in coordinator.selectable if mode != STANDBY]
+        self._attr_preset_modes = [PRESET_SCHEDULE, *modes] if coordinator.has_auto else modes
 
     @property
     def _extract_control(self) -> bool:
@@ -67,7 +68,9 @@ class NestClimate(NestEntity, ClimateEntity):
 
     def _target_name(self) -> str:
         suffix = TARGET_SUFFIX.get(self._mode, "Comfort")
-        return f"AirTemp_{'Extract' if self._extract_control else 'Supply'}Target_{suffix}"
+        name = f"AirTemp_{'Extract' if self._extract_control else 'Supply'}Target_{suffix}"
+        # a NEST has one target for each mode, whichever air it is held by
+        return name if name in self.coordinator.registers.setpoints else f"AirTemp_SupplyTarget_{suffix}"
 
     @property
     def current_temperature(self) -> float | None:
@@ -75,14 +78,20 @@ class NestClimate(NestEntity, ClimateEntity):
 
     @property
     def target_temperature(self) -> float | None:
-        return self.coordinator.value(self._target_name())
+        target = self.coordinator.value(self._target_name())
+        # on a NEST, 0 in place of a target means energy saving
+        return None if self.coordinator.target_limits and not target else target
 
     @property
     def min_temp(self) -> float:
+        if self.coordinator.target_limits:
+            return self.coordinator.target_limits[0]
         return self.coordinator.value("AirTemp_MinAllowedSetpoint") or 0
 
     @property
     def max_temp(self) -> float:
+        if self.coordinator.target_limits:
+            return self.coordinator.target_limits[1]
         return self.coordinator.value("AirTemp_MaxAllowedSetpoint") or 50
 
     @property
@@ -104,6 +113,10 @@ class NestClimate(NestEntity, ClimateEntity):
             return HVACAction.HEATING
         if phase == PHASE_COOLING and self.coordinator.value("AirTemp_PhaseControl_CoolingDemand"):
             return HVACAction.COOLING
+        if self.coordinator.value("Heater_Control_Output"):
+            return HVACAction.HEATING
+        if any(self.coordinator.value(name) for name in ("Hydronic_Cooler_Control_Output", "Dx_Cooler_Control_Output")):
+            return HVACAction.COOLING
         return HVACAction.FAN
 
     @property
@@ -111,9 +124,9 @@ class NestClimate(NestEntity, ClimateEntity):
         if self.coordinator.value("ControlMode") == CONTROL_AUTO:
             return PRESET_SCHEDULE
         mode = self._mode
-        if mode in (None, STANDBY) or not 0 <= mode < len(OPERATING_MODES):
+        if mode in (None, STANDBY) or not 0 <= mode < len(self.coordinator.modes):
             return None
-        return OPERATING_MODES[mode]
+        return self.coordinator.modes[mode]
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         if hvac_mode == HVACMode.OFF:
@@ -127,7 +140,7 @@ class NestClimate(NestEntity, ClimateEntity):
         if preset_mode == PRESET_SCHEDULE:
             await self.coordinator.async_set_auto()
         else:
-            await self.coordinator.async_set_operating_mode(OPERATING_MODES.index(preset_mode))
+            await self.coordinator.async_set_operating_mode(self.coordinator.modes.index(preset_mode))
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
         temperature = kwargs.get(ATTR_TEMPERATURE)
