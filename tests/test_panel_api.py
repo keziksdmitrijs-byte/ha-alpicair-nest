@@ -147,6 +147,15 @@ async def test_control(admin, unit, hass) -> None:
     assert unit.holding[unit.addresses["ControlMode"]] == 0
 
 
+async def test_new_mode_and_dampers_are_read_at_once(admin, unit, loaded) -> None:
+    """The panel shows the picked mode until the command returns, then what the unit really does."""
+    coordinator = loaded.runtime_data
+    unit.input[unit.addresses_dp["OutsideDamper_State"]] = 2
+    assert (await _ask(admin, "control", action="set_mode", mode=3))["success"]
+    assert coordinator.value("CurrentOperatingMode") == 3
+    assert coordinator.value("OutsideDamper_State") == 2
+
+
 async def test_operating_mode_setting_takes_manual_control(hass, admin, unit) -> None:
     await _ask(admin, "control", action="set_auto")
     await hass.async_block_till_done()

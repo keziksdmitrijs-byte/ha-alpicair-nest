@@ -87,7 +87,7 @@ const STRINGS = {
     modes: ["Выключено", "Никого нет", "Эконом", "Комфорт", "Буст", "Вытяжка"],
     scheduleModes: ["Не используется", "Ожидание", "Никого нет", "Эконом", "Комфорт", "Буст"],
     onSchedule: "по расписанию", manual: "вручную", temporary: "временно",
-    scheduleMode: "По расписанию", turnOff: "Выключить", mode: "Режим", menu: "Меню",
+    scheduleMode: "По расписанию", dampersOpening: "Открытие заслонок", dampersClosing: "Закрытие заслонок", turnOff: "Выключить", mode: "Режим", menu: "Меню",
     outdoor: "С улицы", supply: "Приток", extract: "Вытяжка", exhaust: "Выброс",
     toRooms: "В помещения", fromRooms: "Из помещений", fan: "Вентиляторы", air: "Воздух", humidity: "Влажность",
     recovery: "Рекуперация", filter: "Фильтр", target: "цель", now: "сейчас", phases: ["нагрев", "рекуперация", "охлаждение"],
@@ -128,7 +128,7 @@ const STRINGS = {
     modes: ["Izslēgts", "Neviena nav", "Ekonomija", "Komforts", "Boost", "Nosūcējs"],
     scheduleModes: ["Nav izmantots", "Gaidstāve", "Neviena nav", "Ekonomija", "Komforts", "Boost"],
     onSchedule: "pēc grafika", manual: "manuāli", temporary: "pagaidu",
-    scheduleMode: "Pēc grafika", turnOff: "Izslēgt", mode: "Režīms", menu: "Izvēlne",
+    scheduleMode: "Pēc grafika", dampersOpening: "Vārstu atvēršana", dampersClosing: "Vārstu aizvēršana", turnOff: "Izslēgt", mode: "Režīms", menu: "Izvēlne",
     outdoor: "No ārpuses", supply: "Pieplūde", extract: "Nosūce", exhaust: "Izmešana",
     toRooms: "Uz telpām", fromRooms: "No telpām", fan: "Ventilatori", air: "Gaiss", humidity: "Mitrums",
     recovery: "Atguve", filter: "Filtrs", target: "mērķis", now: "tagad", phases: ["apsilde", "atguve", "dzesēšana"],
@@ -169,7 +169,7 @@ const STRINGS = {
     modes: ["Off", "Unoccupied", "Economy", "Comfort", "Boost", "Hood"],
     scheduleModes: ["Not used", "Standby", "Unoccupied", "Economy", "Comfort", "Boost"],
     onSchedule: "on schedule", manual: "manual", temporary: "temporary",
-    scheduleMode: "Schedule", turnOff: "Turn off", mode: "Mode", menu: "Menu",
+    scheduleMode: "Schedule", dampersOpening: "Opening dampers", dampersClosing: "Closing dampers", turnOff: "Turn off", mode: "Mode", menu: "Menu",
     outdoor: "From outside", supply: "Supply", extract: "Extract", exhaust: "Exhaust",
     toRooms: "To rooms", fromRooms: "From rooms", fan: "Fans", air: "Air", humidity: "Humidity",
     recovery: "Recovery", filter: "Filter", target: "target", now: "now", phases: ["heating", "recovery", "cooling"],
@@ -567,6 +567,8 @@ const READINGS = {
   inputs: "chip", temporary: "clock", schedule: "calendar", system: "sliders", device: "info",
 };
 
+// states of a NEST that are a step on the way, not a mode: preparing, opening dampers, cooling heaters, closing dampers
+const BUSY_STATES = [5, 6, 8, 9];
 const or = (value, other) => (value === null || value === undefined ? other : value);
 const esc = (text) =>
   String(or(text, "")).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -889,6 +891,7 @@ class AlpicAirNestWall extends HTMLElement {
     this._token = null;
     this._tokenUntil = 0;
     this._pendingTarget = null;
+    this._pendingMode = null;
     // what differs between a NEST and a NEST LS; the unit's own comes with its schema
     this._profile = { model: "nest_ls", selectable: [0, 1, 2, 3, 4, 5], auto: true, schedule: true };
     this._plant(TREE);
@@ -1320,11 +1323,35 @@ class AlpicAirNestWall extends HTMLElement {
     if (view === "branch" && this._nodes[this._top.id].service) this._tick();
   }
 
+  // mode is the mode the unit is in; shown is what the mode button says: the mode just picked until
+  // the unit has answered, then what the unit is busy with on the way there, then the mode itself
   _modeState() {
     const t = this._t;
-    const mode = this._dp.CurrentOperatingMode;
+    const mode = this._modeName(this._dp.CurrentOperatingMode);
     const how = { 0: t.onSchedule, 1: t.manual, 2: t.temporary }[this._sp.ControlMode];
-    return { mode: this._modeName(mode), how: how || "" };
+    const shown = this._pendingMode ? this._modeName(this._pendingMode.mode) : this._busy() || mode;
+    return { mode, shown, how: how || "" };
+  }
+
+  // dampers moving, heaters cooling down: a NEST tells it as its state, a NEST LS by its outside damper
+  _busy() {
+    if (this._isNest()) {
+      const state = this._dp.SystemState;
+      const item = this._datapoints.SystemState;
+      return BUSY_STATES.indexOf(state) >= 0 && item && item.options ? or(item.options[state], null) : null;
+    }
+    return or({ 2: this._t.dampersOpening, 4: this._t.dampersClosing }[this._dp.OutsideDamper_State], null);
+  }
+
+  // the picked mode shows at once; what the unit holds takes its place when the command has been read back
+  async _setMode(mode) {
+    const pending = { mode };
+    this._pendingMode = pending;
+    this._refresh();
+    await this._control({ action: "set_mode", mode });
+    if (this._pendingMode !== pending) return;
+    this._pendingMode = null;
+    this._refresh();
   }
 
   _airValue() {
@@ -1340,7 +1367,7 @@ class AlpicAirNestWall extends HTMLElement {
   _live(key) {
     const t = this._t;
     switch (key) {
-      case "mode": return this._modeState().mode;
+      case "mode": return this._modeState().shown;
       case "climate": return this._degrees(this._targetValue());
       case "vent": return this._reading("Fan1_Output", 0);
       case "air": return this._airValue()[1];
@@ -1409,8 +1436,8 @@ class AlpicAirNestWall extends HTMLElement {
 
   _sheetMode() {
     const t = this._t;
-    const auto = this._sp.ControlMode === 0;
-    const current = this._dp.CurrentOperatingMode;
+    const auto = this._sp.ControlMode === 0 && !this._pendingMode;
+    const current = this._pendingMode ? this._pendingMode.mode : this._dp.CurrentOperatingMode;
     const pick = (mode, label, cls = "") => `<button class="pick ${cls} ${!auto && mode === current ? "on" : ""}" data-mode="${mode}">
       <b>${esc(label)}</b><span>${esc(mode ? this._modeFacts(mode) : "")}</span></button>`;
     return `<div class="sheet-head"><b>${esc(t.mode)}</b><span>${esc(t.closesOnPick)}</span></div>
@@ -1464,7 +1491,7 @@ class AlpicAirNestWall extends HTMLElement {
   _refreshHouse() {
     const root = this.shadowRoot;
     const { items, now, item, asked } = this._fanAsked();
-    this._put("h-mode", this._modeState().mode);
+    this._put("h-mode", this._modeState().shown);
     this._put("h-time", this._clock());
     this._put("h-speed", this._number(asked));
     this._put("h-speed-unit", now.unit);
@@ -1595,7 +1622,7 @@ class AlpicAirNestWall extends HTMLElement {
     const value = this.shadowRoot.getElementById("r-value");
     value.innerHTML = `${esc(this._number(asked))}<small>${esc(now.unit)}</small>`;
     value.className = now.unit === "%" ? "" : "tight";
-    this._put("r-note", this._modeState().mode);
+    this._put("r-note", this._modeState().shown);
     this._put("h-supply", this._reading("Fan1_Output", 0));
     this._put("h-extract", this._reading("Fan2_Output", 0));
     this._put("h-supply-rpm", this._reading("Fan1_RPM"));
@@ -1705,7 +1732,7 @@ class AlpicAirNestWall extends HTMLElement {
       return;
     }
     const t = this._t;
-    const { mode, how } = this._modeState();
+    const { shown: mode, how } = this._modeState();
     const phase = t.phases[this._dp.AirTemp_PhaseControl_WhatPhase];
     const running = this._dp.CurrentOperatingMode !== 0;
     this._put("h-mode", mode);
@@ -1873,8 +1900,8 @@ class AlpicAirNestWall extends HTMLElement {
 
   _refreshModes() {
     const root = this.shadowRoot;
-    const auto = this._sp.ControlMode === 0;
-    const current = this._dp.CurrentOperatingMode;
+    const auto = this._sp.ControlMode === 0 && !this._pendingMode;
+    const current = this._pendingMode ? this._pendingMode.mode : this._dp.CurrentOperatingMode;
     const button = root.querySelector('[data-do="auto"]');
     if (button) button.classList.toggle("on", auto);
     root.querySelectorAll("[data-mode]").forEach((node) => {
@@ -2493,7 +2520,7 @@ class AlpicAirNestWall extends HTMLElement {
     else if (data.edit) this._edit(data.edit);
     else if (data.press) this._press(data.press);
     else if (data.mode !== undefined) {
-      this._control({ action: "set_mode", mode: Number(data.mode) });
+      this._setMode(Number(data.mode));
       this._closeSheet();
     }
     else if (data.pick !== undefined) this._pick(Number(data.pick));
@@ -2570,7 +2597,7 @@ class AlpicAirNestWall extends HTMLElement {
   async _pick(value) {
     const item = this._setpoints[this._top.name];
     if (item.name === "OperatingMode") {
-      await this._control({ action: "set_mode", mode: value });
+      this._setMode(value);
       this._back();
     } else if (await this._write(item, value)) this._back();
   }

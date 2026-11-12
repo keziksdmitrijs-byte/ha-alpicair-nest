@@ -466,11 +466,28 @@ class NestCoordinator(DataUpdateCoordinator[NestData]):
         if self.value("ControlMode") != CONTROL_MANUAL:
             await self.async_write("ControlMode", CONTROL_MANUAL)
         await self.async_write("OperatingMode", mode)
+        await self._read_now("CurrentOperatingMode", "OutsideDamper_State")
         await self.async_request_refresh()
+
+    async def _read_now(self, *names: str) -> None:
+        """Readings a command has just changed, without waiting for the next poll."""
+        async with self._lock:
+            for name in names:
+                register = self.registers.find(name)
+                if register is None:
+                    continue
+                try:
+                    raw = (await self._reader(register.store)(register.address, 1))[0]
+                except ModbusError as err:
+                    _LOGGER.debug("No %s after the command: %s", name, err)
+                    continue
+                getattr(self.data, register.store)[register.address] = raw
+        self.async_update_listeners()
 
     async def async_set_auto(self) -> None:
         """Hands the unit back to its schedule."""
         await self.async_write("ControlMode", CONTROL_AUTO)
+        await self._read_now("CurrentOperatingMode", "OutsideDamper_State")
         await self.async_request_refresh()
 
     async def async_sync_clock(self) -> None:
@@ -567,19 +584,6 @@ class NestMcbCoordinator(NestCoordinator):
             await self.async_write("OperatingMode", mode)
         await self._read_now("CurrentOperatingMode", "SystemState")
         await self.async_request_refresh()
-
-    async def _read_now(self, *names: str) -> None:
-        """Readings a command has just changed, without waiting for the next poll."""
-        async with self._lock:
-            for name in names:
-                register = self.registers.get(name)
-                try:
-                    raw = (await self._reader(register.store)(register.address, 1))[0]
-                except ModbusError as err:
-                    _LOGGER.debug("No %s after the command: %s", name, err)
-                    continue
-                getattr(self.data, register.store)[register.address] = raw
-        self.async_update_listeners()
 
     async def async_set_auto(self) -> None:
         raise ValueError("This unit follows its schedule by itself")

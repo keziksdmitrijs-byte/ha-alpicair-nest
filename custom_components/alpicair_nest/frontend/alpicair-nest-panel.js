@@ -25,7 +25,7 @@ const STRINGS = {
     faultsActive: (n) => `Активных неисправностей: ${n}`, showFaults: "Подробнее",
     outdoor: "С улицы", supply: "В помещения", extract: "Из помещений", exhaust: "Выброс",
     recovery: "рекуперация", supplyFan: "Приток", exhaustFan: "Вытяжка",
-    control: "Управление", scheduleMode: "По расписанию", off: "Выключить",
+    control: "Управление", dampersOpening: "Открытие заслонок", dampersClosing: "Закрытие заслонок", scheduleMode: "По расписанию", off: "Выключить",
     modes: ["Ожидание", "Никого нет", "Эконом", "Комфорт", "Буст", "Вытяжка"],
     now: "Сейчас", manual: "вручную", onSchedule: "по расписанию", temporary: "временный режим",
     targetSupply: "Уставка притока", targetExtract: "Уставка вытяжки",
@@ -82,7 +82,7 @@ const STRINGS = {
     faultsActive: (n) => `Active faults: ${n}`, showFaults: "Details",
     outdoor: "From outside", supply: "To rooms", extract: "From rooms", exhaust: "Exhaust",
     recovery: "recovery", supplyFan: "Supply", exhaustFan: "Extract",
-    control: "Control", scheduleMode: "Schedule", off: "Turn off",
+    control: "Control", dampersOpening: "Opening dampers", dampersClosing: "Closing dampers", scheduleMode: "Schedule", off: "Turn off",
     modes: ["Standby", "Unoccupied", "Economy", "Comfort", "Boost", "Kitchen hood"],
     now: "Now", manual: "manual", onSchedule: "on schedule", temporary: "temporary mode",
     targetSupply: "Supply target", targetExtract: "Extract target",
@@ -141,7 +141,7 @@ STRINGS.lv = {
   faultsActive: (n) => `Aktīvie bojājumi: ${n}`, showFaults: "Sīkāk",
   outdoor: "No ārpuses", supply: "Uz telpām", extract: "No telpām", exhaust: "Izmešana",
   recovery: "atguve", supplyFan: "Pieplūde", exhaustFan: "Nosūce",
-  control: "Vadība", scheduleMode: "Pēc grafika", off: "Izslēgt",
+  control: "Vadība", dampersOpening: "Vārstu atvēršana", dampersClosing: "Vārstu aizvēršana", scheduleMode: "Pēc grafika", off: "Izslēgt",
   modes: ["Gaidstāve", "Neviena nav", "Ekonomija", "Komforts", "Boost", "Tvaika nosūcējs"],
   now: "Tagad", manual: "manuāli", onSchedule: "pēc grafika", temporary: "pagaidu režīms",
   targetSupply: "Pieplūdes iestatījums", targetExtract: "Nosūces iestatījums",
@@ -166,6 +166,8 @@ STRINGS.lv = {
   appeared: "parādījās", cleared: "pazuda", kinds: { error: "Kļūda", warning: "Brīdinājums", alarm: "Trauksme" },
 };
 
+// states of a NEST that are a step on the way, not a mode: preparing, opening dampers, cooling heaters, closing dampers
+const BUSY_STATES = [5, 6, 8, 9];
 const or = (value, other) => (value === null || value === undefined ? other : value);
 
 const byName = (items) => {
@@ -452,6 +454,7 @@ class AlpicAirNestPanel extends HTMLElement {
     const hash = location.hash.slice(1);
     this._tab = TABS.includes(hash) ? hash : "overview";
     this._dp = {};
+    this._pendingMode = null;
     this._sp = {};
     this._status = { available: true, virtual: {}, faults: [], words: {} };
     // what differs between a NEST and a NEST LS; the unit's own comes with its schema
@@ -629,6 +632,27 @@ class AlpicAirNestPanel extends HTMLElement {
 
   _modeName(mode) {
     return or((this._profile.modes || this._t.modes)[mode], "—");
+  }
+
+  // dampers moving, heaters cooling down: a NEST tells it as its state, a NEST LS by its outside damper
+  _busy() {
+    if (this._profile.model === "nest") {
+      const state = this._dp.SystemState;
+      const item = this._datapoints.SystemState;
+      return BUSY_STATES.indexOf(state) >= 0 && item && item.options ? or(item.options[state], null) : null;
+    }
+    return or({ 2: this._t.dampersOpening, 4: this._t.dampersClosing }[this._dp.OutsideDamper_State], null);
+  }
+
+  // the picked mode shows at once; what the unit holds takes its place when the command has been read back
+  async _setMode(mode) {
+    const pending = { mode };
+    this._pendingMode = pending;
+    this._refreshOverview();
+    await this._run(this._call("control", { action: "set_mode", mode }));
+    if (this._pendingMode !== pending) return;
+    this._pendingMode = null;
+    this._refreshOverview();
   }
 
   _onEvent(event) {
@@ -835,14 +859,17 @@ class AlpicAirNestPanel extends HTMLElement {
     root.getElementById("fan-exhaust").style.setProperty("--spin", spin(dp.Fan2_Output));
     root.getElementById("core").textContent = virtual.recovery_efficiency === undefined ? "—" : `${this._number(virtual.recovery_efficiency)} %`;
 
-    const auto = sp.ControlMode === 0;
+    const pending = this._pendingMode;
+    const auto = sp.ControlMode === 0 && !pending;
+    const current = pending ? pending.mode : dp.CurrentOperatingMode;
     const autoButton = root.querySelector('[data-action="auto"]');
     if (autoButton) autoButton.setAttribute("aria-pressed", String(auto));
     root.querySelectorAll('[data-action="mode"]').forEach((button) => {
-      button.setAttribute("aria-pressed", String(!auto && Number(button.dataset.mode) === dp.CurrentOperatingMode));
+      button.setAttribute("aria-pressed", String(!auto && Number(button.dataset.mode) === current));
     });
     const how = { 0: t.onSchedule, 1: t.manual, 2: t.temporary }[sp.ControlMode];
-    const state = `${this._modeName(dp.CurrentOperatingMode)}${how ? ` · ${how}` : ""}`;
+    const shown = pending ? this._modeName(pending.mode) : this._busy() || this._modeName(dp.CurrentOperatingMode);
+    const state = `${shown}${how && !pending ? ` · ${how}` : ""}`;
     root.getElementById("now").textContent = `${t.now}: ${state}`;
     if (this._compact) root.getElementById("title").textContent = state;
 
@@ -1258,7 +1285,7 @@ class AlpicAirNestPanel extends HTMLElement {
         this._render();
         break;
       case "mode":
-        this._run(this._call("control", { action: "set_mode", mode: Number(node.dataset.mode) }));
+        this._setMode(Number(node.dataset.mode));
         break;
       case "auto":
         this._run(this._call("control", { action: "set_auto" }));
@@ -1466,6 +1493,7 @@ class AlpicAirNestPanel extends HTMLElement {
     this._ready = false;
     this._token = null;
     this._dp = {};
+    this._pendingMode = null;
     this._sp = {};
     this._render();
     await this._run(this._load());
